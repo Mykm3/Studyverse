@@ -78,7 +78,7 @@ Would you like me to explain any of these hooks in more detail?`,
             )}
             <div
               className={`p-4 rounded-lg ${
-                message.role === "user" ? "bg-primary text-primary-foreground" : "bg-gray-100 dark:bg-gray-800"
+                message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
               }`}
             >
               <div className="whitespace-pre-wrap">{message.content}</div>

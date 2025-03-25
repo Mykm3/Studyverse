@@ -1,50 +1,98 @@
-import { Routes, Route } from "react-router-dom";
-import { useEffect, useState } from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { Toaster } from "@/components/ui/Toaster";
+import Login from "@/components/Login";
+import Register from "@/components/Register";
+import AuthCallback from "@/components/AuthCallback";
+import StudyDashboard from "@/components/StudyDashboard";
+import StudyPlan from "@/components/StudyPlan";
+import Sidebar from "@/components/Sidebar";
 import Dashboard from "./pages/dashboard";
 import Notebook from "./pages/notebook";
-import StudyPlan from "./pages/studyplan";
 import AIAssistant from "./pages/AIAssistant";
 import Settings from "./pages/Settings";
-import Sidebar from "./components/Sidebar";
+import { AuthProvider } from "@/contexts/AuthContext";
+import ProtectedRoute from "@/components/ProtectedRoute";
 
-function App() {
-  const [message, setMessage] = useState("");
-
-  // Fetch backend API message and log it in the console
-  useEffect(() => {
-    fetch("http://localhost:5000")
-      .then((res) => res.text())
-      .then((data) => {
-        console.log("Backend Message:", data);
-        setMessage(data);
-      })
-      .catch(() => console.error("Error fetching API"));
-  }, []);
-
-  // Handle theme persistence
-  useEffect(() => {
-    const theme = localStorage.getItem("theme") || "light"; // Default to light mode
-    if (theme === "dark") {
-      document.documentElement.classList.add("dark");
-    } else {
-      document.documentElement.classList.remove("dark");
-    }
-  }, []);
-
+// Layout component with sidebar
+const Layout = ({ children }) => {
   return (
     <div className="flex h-screen">
       <Sidebar />
-      <div className="flex-1 p-6">
-        {/* Page Routing */}
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/notebook" element={<Notebook />} />
-          <Route path="/study-plan" element={<StudyPlan />} />
-          <Route path="/ai-assistant" element={<AIAssistant />} />
-          <Route path="/settings" element={<Settings />} />
-        </Routes>
-      </div>
+      <main className="flex-1 overflow-y-auto">
+        {children}
+      </main>
     </div>
+  );
+};
+
+function App() {
+  return (
+    <Router>
+      <AuthProvider>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login" element={<Login />} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/auth/callback" element={<AuthCallback />} />
+
+          {/* Protected routes */}
+          <Route
+            path="/dashboard"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <StudyDashboard />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/study-plan"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <StudyPlan />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/notebook"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <Notebook />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ai-assistant"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <AIAssistant />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <Settings />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Redirect root to dashboard */}
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+        </Routes>
+        <Toaster />
+      </AuthProvider>
+    </Router>
   );
 }
 

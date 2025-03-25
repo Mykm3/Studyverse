@@ -5,13 +5,17 @@ import { Calendar, Clock, BookOpen, TrendingUp, Plus } from "lucide-react"
 import StudySuggestions from "@/components/StudySuggestions"
 import RecentNotes from "@/components/RecentNotes"
 import { Link } from "react-router-dom"
+import { useAuth } from "@/contexts/AuthContext"
 
 export default function StudyDashboard() {
+  const { user } = useAuth()
+  const firstName = user?.displayName?.split(" ")[0] || "there"
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Welcome back, John</h1>
+          <h1 className="text-2xl font-bold">Welcome back, {firstName}</h1>
           <p className="text-gray-500 dark:text-gray-400">Here's an overview of your study progress</p>
         </div>
         <div className="flex space-x-2">
