@@ -9,7 +9,8 @@ const DropdownMenu = ({ children }) => {
 }
 
 const DropdownMenuTrigger = forwardRef(({ className, asChild, ...props }, ref) => {
-  return <button ref={ref} className={cn("inline-flex w-full justify-center", className)} {...props} />
+  const Comp = asChild ? "div" : "button"
+  return <Comp ref={ref} className={cn("inline-flex w-full justify-center", className)} {...props} />
 })
 DropdownMenuTrigger.displayName = "DropdownMenuTrigger"
 

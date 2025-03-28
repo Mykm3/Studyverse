@@ -6,6 +6,7 @@ const mongoose = require("mongoose");
 const session = require("express-session");
 const passport = require("./config/passport");
 const authRoutes = require("./routes/auth");
+const studySessionRoutes = require('./routes/studySessions');
 
 // Debug logging
 console.log('Server configuration:');
@@ -51,14 +52,15 @@ app.use((req, res, next) => {
 
 // MongoDB connection options
 const mongooseOptions = {
-  serverSelectionTimeoutMS: 30000,
-  socketTimeoutMS: 45000,
-  connectTimeoutMS: 30000,
+  serverSelectionTimeoutMS: 60000, // Increase timeout to 60 seconds
+  socketTimeoutMS: 60000,
+  connectTimeoutMS: 60000,
   family: 4,
   retryWrites: true,
   w: 'majority',
   maxPoolSize: 10,
-  minPoolSize: 1
+  minPoolSize: 1,
+  heartbeatFrequencyMS: 10000
 };
 
 // Connect to MongoDB with retry logic
@@ -78,6 +80,18 @@ const connectWithRetry = async () => {
     } catch (error) {
       console.error('MongoDB connection error:', error.message);
       console.error('Error details:', error);
+      
+      // Handle specific error types
+      if (error.name === 'MongoServerError' && error.message.includes('bad auth')) {
+        console.error('Authentication failed. Please check your MongoDB credentials.');
+        console.error('Make sure your IP address is whitelisted in MongoDB Atlas.');
+        process.exit(1);
+      }
+      
+      if (error.name === 'MongoNetworkError') {
+        console.error('Network error. Please check your internet connection and MongoDB Atlas IP whitelist.');
+      }
+      
       retries--;
       if (retries === 0) {
         console.error('Failed to connect to MongoDB after 5 attempts');
@@ -107,15 +121,44 @@ mongoose.connection.on('reconnected', () => {
   console.log('MongoDB reconnected successfully');
 });
 
+// Handle process termination
+process.on('SIGINT', async () => {
+  try {
+    await mongoose.connection.close();
+    console.log('MongoDB connection closed through app termination');
+    process.exit(0);
+  } catch (err) {
+    console.error('Error during MongoDB connection closure:', err);
+    process.exit(1);
+  }
+});
+
 // Initial connection
 connectWithRetry();
+
+// Debug middleware to log all requests
+app.use((req, res, next) => {
+  console.log('Incoming request:', {
+    method: req.method,
+    url: req.url,
+    headers: req.headers,
+    body: req.body
+  });
+  next();
+});
 
 // Routes
 app.get('/', (req, res) => {
   res.json({ message: 'Study Planner API is running' });
 });
 
-app.use('/auth', authRoutes);
+// Debug logging for route mounting
+console.log('Mounting routes...');
+console.log('Mounting auth routes at /api/auth');
+app.use('/api/auth', authRoutes);
+
+console.log('Mounting study sessions routes at /api/study-sessions');
+app.use('/api/study-sessions', studySessionRoutes);
 
 // Protected route example
 app.get("/api/protected", (req, res) => {

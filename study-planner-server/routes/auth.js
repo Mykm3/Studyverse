@@ -3,6 +3,7 @@ const passport = require('passport');
 const jwt = require('jsonwebtoken');
 const router = express.Router();
 const User = require('../models/User');
+const auth = require('../middleware/auth');
 
 // Helper function to handle MongoDB errors
 const handleMongoError = (error, res) => {
@@ -135,44 +136,15 @@ router.post('/login', async (req, res) => {
   }
 });
 
-// Google OAuth login route
+// Google OAuth routes
 router.get('/google',
-  passport.authenticate('google', { 
-    scope: ['profile', 'email'],
-    prompt: 'select_account'
-  })
+  passport.authenticate('google', { scope: ['profile', 'email'] })
 );
 
-// Google OAuth callback route
 router.get('/google/callback',
-  passport.authenticate('google', { 
-    failureRedirect: '/login',
-    failureMessage: true,
-    session: true
-  }),
+  passport.authenticate('google', { failureRedirect: '/login' }),
   async (req, res) => {
     try {
-      if (!req.user) {
-        throw new Error('No user data received from Google');
-      }
-
-      console.log('Google OAuth callback received for user:', req.user.email);
-      
-      // Ensure user is saved in session
-      req.session.user = {
-        id: req.user._id,
-        email: req.user.email,
-        displayName: req.user.displayName
-      };
-
-      // Save session explicitly
-      await new Promise((resolve, reject) => {
-        req.session.save((err) => {
-          if (err) reject(err);
-          else resolve();
-        });
-      });
-
       // Generate JWT token
       const token = jwt.sign(
         { id: req.user._id, email: req.user.email },
@@ -181,36 +153,10 @@ router.get('/google/callback',
       );
 
       // Redirect to frontend with token
-      const redirectUrl = `${process.env.CLIENT_URL}/auth/callback?token=${token}`;
-      console.log('Redirecting to:', redirectUrl);
-      res.redirect(redirectUrl);
+      res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);
     } catch (error) {
-      console.error('Error in Google callback:', error);
-      
-      // Handle specific error types
-      if (error.name === 'MongooseError' && error.message.includes('buffering timed out')) {
-        console.error('Database timeout error during Google callback');
-        const errorUrl = `${process.env.CLIENT_URL}/login?error=${encodeURIComponent('Database connection timeout. Please try again.')}`;
-        return res.redirect(errorUrl);
-      }
-
-      if (error.name === 'MongoError' || error.name === 'MongooseError') {
-        console.error('Database error during Google callback:', error);
-        const errorUrl = `${process.env.CLIENT_URL}/login?error=${encodeURIComponent('Database error occurred. Please try again.')}`;
-        return res.redirect(errorUrl);
-      }
-
-      // Handle session errors
-      if (error.name === 'SessionError') {
-        console.error('Session error during Google callback:', error);
-        const errorUrl = `${process.env.CLIENT_URL}/login?error=${encodeURIComponent('Session error occurred. Please try again.')}`;
-        return res.redirect(errorUrl);
-      }
-
-      // Handle other errors
-      const errorUrl = `${process.env.CLIENT_URL}/login?error=${encodeURIComponent(error.message)}`;
-      console.log('Redirecting to error page:', errorUrl);
-      res.redirect(errorUrl);
+      console.error('Google OAuth callback error:', error);
+      res.redirect(`${process.env.CLIENT_URL}/login?error=oauth_failed`);
     }
   }
 );
@@ -233,19 +179,17 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-// Get current user profile
-router.get('/profile', verifyToken, async (req, res) => {
+// Get user profile
+router.get('/profile', auth, async (req, res) => {
   try {
-    const user = await User.findById(req.user.id)
-      .select('-password -googleId')
-      .maxTimeMS(5000);
-      
+    const user = await User.findById(req.user._id).select('-password');
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
     res.json(user);
   } catch (error) {
-    handleMongoError(error, res);
+    console.error('Error fetching user profile:', error);
+    res.status(500).json({ message: 'Server error' });
   }
 });
 

@@ -1,43 +1,42 @@
-import { useEffect, useState } from "react";
-import { createPortal } from "react-dom";
+import { useEffect } from 'react';
+import { useToast } from './use-toast';
 
 export function Toaster() {
-  const [toasts, setToasts] = useState([]);
+  const { toasts } = useToast();
 
-  useEffect(() => {
-    const handleCustomEvent = (event) => {
-      const { message, type = "default" } = event.detail;
-      const id = Date.now();
-      
-      setToasts((prev) => [...prev, { id, message, type }]);
-      
-      setTimeout(() => {
-        setToasts((prev) => prev.filter((toast) => toast.id !== id));
-      }, 3000);
-    };
-
-    window.addEventListener("show-toast", handleCustomEvent);
-    return () => window.removeEventListener("show-toast", handleCustomEvent);
-  }, []);
-
-  return createPortal(
-    <div className="fixed bottom-0 right-0 z-50 p-4 space-y-2">
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        bottom: '20px',
+        right: '20px',
+        zIndex: 1000,
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '10px'
+      }}
+    >
       {toasts.map((toast) => (
         <div
           key={toast.id}
-          className={`rounded-lg px-4 py-2 text-white shadow-lg transform transition-all duration-300 ${
-            toast.type === "error"
-              ? "bg-red-500"
-              : toast.type === "success"
-              ? "bg-green-500"
-              : "bg-gray-800"
-          }`}
+          style={{
+            backgroundColor: toast.variant === 'destructive' ? '#ef4444' : '#4a90e2',
+            color: 'white',
+            padding: '12px 24px',
+            borderRadius: '4px',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+            animation: 'slideIn 0.3s ease-out'
+          }}
         >
-          {toast.message}
+          <h4 style={{ margin: '0 0 4px 0', fontSize: '16px', fontWeight: '500' }}>
+            {toast.title}
+          </h4>
+          <p style={{ margin: 0, fontSize: '14px', opacity: 0.9 }}>
+            {toast.description}
+          </p>
         </div>
       ))}
-    </div>,
-    document.body
+    </div>
   );
 }
 

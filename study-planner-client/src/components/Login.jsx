@@ -52,7 +52,7 @@ export default function Login() {
 
   const handleGoogleLogin = () => {
     try {
-      window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/auth/google`;
+      window.location.href = `${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/google`;
     } catch (error) {
       console.error("Error initiating Google login:", error);
       showToast("Failed to initiate Google sign in", "error");

@@ -12,6 +12,7 @@ import AIAssistant from "./pages/AIAssistant";
 import Settings from "./pages/Settings";
 import { AuthProvider } from "@/contexts/AuthContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import AddSession from './pages/AddSession';
 
 // Layout component with sidebar
 const Layout = ({ children }) => {
@@ -82,6 +83,16 @@ function App() {
               <ProtectedRoute>
                 <Layout>
                   <Settings />
+                </Layout>
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/add-session"
+            element={
+              <ProtectedRoute>
+                <Layout>
+                  <AddSession />
                 </Layout>
               </ProtectedRoute>
             }
