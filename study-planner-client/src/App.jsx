@@ -9,7 +9,7 @@ import Sidebar from "@/components/Sidebar";
 import Dashboard from "./pages/dashboard";
 import Notebook from "./pages/notebook";
 import Analytics from "./pages/analytics";
-import AIAssistant from "./pages/AIAssistant";
+import StudySession from "./pages/StudySession";
 import Settings from "./pages/Settings";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SubjectProvider } from "@/contexts/SubjectContext";
@@ -97,11 +97,11 @@ function App() {
               }
             />
             <Route
-              path="/ai-assistant"
+              path="/study-session"
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <AIAssistant />
+                    <StudySession />
                   </Layout>
                 </ProtectedRoute>
               }

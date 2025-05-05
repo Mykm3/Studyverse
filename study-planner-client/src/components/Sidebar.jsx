@@ -53,7 +53,7 @@ export default function Sidebar() {
     { name: "Notebook", href: "/notebook", icon: Notebook, color: "text-success" },
     { name: "Study Plan", href: "/study-plan", icon: Calendar, color: "text-accent-foreground" },
     { name: "Analytics", href: "/analytics", icon: BarChart2, color: "text-warning" },
-    { name: "AI Assistant", href: "/ai-assistant", icon: Brain, color: "text-secondary-foreground" },
+    { name: "Study Session", href: "/study-session", icon: Brain, color: "text-secondary-foreground" },
     { name: "Settings", href: "/settings", icon: Settings, color: "text-muted-foreground" },
   ]
 

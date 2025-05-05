@@ -164,7 +164,7 @@ export default function NotebookPage() {
             <CardContent className="p-6">
               <div className="flex flex-col items-center">
                 <h2 className="text-lg font-semibold mb-4">Overall Progress</h2>
-                <CircularProgress value={overallProgress} size={150} strokeWidth={10} progressColor="var(--primary)" />
+                <CircularProgress value={overallProgress} size={150} strokeWidth={10} progressColor="var(--primary-color)" />
                 <p className="mt-4 text-sm text-muted-foreground">
                   You've completed {overallProgress}% of your study materials
                 </p>
@@ -264,17 +264,17 @@ export default function NotebookPage() {
                       }).map((note) => (
                         <Card key={note.id} className="overflow-hidden hover:shadow-md transition-shadow">
                           <div
-                            className="h-32 bg-slate-100 flex items-center justify-center cursor-pointer"
+                            className="h-32 bg-muted flex items-center justify-center cursor-pointer"
                             onClick={() => handleOpenDocument(note.id)}
                           >
-                            <div className="text-4xl text-slate-400 uppercase font-bold">{note.type}</div>
+                            <div className="text-4xl text-muted-foreground uppercase font-bold">{note.type}</div>
                           </div>
                           <CardContent className="p-4">
                             <div className="flex justify-between items-start mb-2">
                               <h3 className="font-medium line-clamp-1">{note.title}</h3>
-                              <span className="text-xs bg-slate-100 px-2 py-1 rounded">{note.type.toUpperCase()}</span>
+                              <span className="text-xs bg-muted px-2 py-1 rounded">{note.type.toUpperCase()}</span>
                             </div>
-                            <div className="flex justify-between text-xs text-slate-500 mb-3">
+                            <div className="flex justify-between text-xs text-muted-foreground mb-3">
                               <span>{new Date(note.dateAdded).toLocaleDateString()}</span>
                               <span>{note.size}</span>
                             </div>
@@ -283,13 +283,13 @@ export default function NotebookPage() {
                                 <span>Progress</span>
                                 <span>{note.progress}%</span>
                               </div>
-                              <div className="w-full bg-slate-100 rounded-full h-1.5">
+                              <div className="w-full bg-muted rounded-full h-1.5">
                                 <div
                                   className="bg-primary h-1.5 rounded-full"
                                   style={{ width: `${note.progress}%` }}
                                 ></div>
                               </div>
-                              <div className="flex justify-between text-xs text-slate-500">
+                              <div className="flex justify-between text-xs text-muted-foreground">
                                 <span>
                                   Page {note.currentPage} of {note.pages}
                                 </span>
