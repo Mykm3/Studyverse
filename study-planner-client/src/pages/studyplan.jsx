@@ -1,10 +1,56 @@
+import { useState, useEffect } from "react";
 import { Button } from "../components/ui/Button"
 import { CalendarIcon, Plus, ChevronLeft, ChevronRight } from "lucide-react"
 import StudyCalendar from "../components/StudyCalendar"
 import UpcomingSessions from "../components/UpcomingSessions"
+import Calendar from "../components/Calendar";
+import NotificationDashboard from "../components/NotificationDashboard";
+import { showToast } from "../lib/toast";
 
 export default function StudyPlanPage() {
-  const currentMonth = "March 2025"
+  const [sessions, setSessions] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchSessions = async () => {
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/study-sessions`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch sessions");
+      }
+
+      const data = await response.json();
+      setSessions(data);
+    } catch (error) {
+      console.error("Error fetching sessions:", error);
+      showToast({
+        title: "Error",
+        description: "Failed to fetch study sessions",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchSessions();
+  }, []);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -31,7 +77,7 @@ export default function StudyPlanPage() {
             <Button variant="outline" size="icon" className="mr-2">
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <h2 className="text-lg font-medium">{currentMonth}</h2>
+            <h2 className="text-lg font-medium">{new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}</h2>
             <Button variant="outline" size="icon" className="ml-2">
               <ChevronRight className="h-4 w-4" />
             </Button>
@@ -51,10 +97,10 @@ export default function StudyPlanPage() {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
-            <StudyCalendar />
+            <Calendar sessions={sessions} onSessionUpdate={fetchSessions} />
           </div>
           <div>
-            <UpcomingSessions />
+            <NotificationDashboard sessions={sessions} />
           </div>
         </div>
       </main>

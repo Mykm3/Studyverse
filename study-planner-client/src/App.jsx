@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { Toaster } from "@/components/ui/Toaster";
 import Login from "@/components/Login";
 import Register from "@/components/Register";
@@ -8,11 +8,37 @@ import StudyPlan from "@/components/StudyPlan";
 import Sidebar from "@/components/Sidebar";
 import Dashboard from "./pages/dashboard";
 import Notebook from "./pages/notebook";
+import Analytics from "./pages/analytics";
 import AIAssistant from "./pages/AIAssistant";
 import Settings from "./pages/Settings";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { SubjectProvider } from "@/contexts/SubjectContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AddSession from './pages/AddSession';
+import EditSession from './pages/EditSession';
+import { useState, useEffect } from 'react';
+
+// Animated page transition wrapper
+const PageTransition = ({ children }) => {
+  const location = useLocation();
+  const [isAnimating, setIsAnimating] = useState(false);
+  
+  useEffect(() => {
+    setIsAnimating(true);
+    const timer = setTimeout(() => setIsAnimating(false), 500);
+    return () => clearTimeout(timer);
+  }, [location.pathname]);
+  
+  return (
+    <div className={`page-transition ${isAnimating ? 'animate-in' : ''}`} style={{ 
+      opacity: isAnimating ? 0 : 1,
+      transform: isAnimating ? 'translateY(10px)' : 'translateY(0)',
+      transition: 'all 0.4s ease-out'
+    }}>
+      {children}
+    </div>
+  );
+};
 
 // Layout component with sidebar
 const Layout = ({ children }) => {
@@ -20,7 +46,9 @@ const Layout = ({ children }) => {
     <div className="flex h-screen">
       <Sidebar />
       <main className="flex-1 overflow-y-auto">
+        <PageTransition>
         {children}
+        </PageTransition>
       </main>
     </div>
   );
@@ -30,78 +58,100 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <Routes>
-          {/* Public routes */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/auth/callback" element={<AuthCallback />} />
+        <SubjectProvider>
+          <Routes>
+            {/* Public routes */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/auth/callback" element={<AuthCallback />} />
 
-          {/* Protected routes */}
-          <Route
-            path="/dashboard"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <StudyDashboard />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/study-plan"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <StudyPlan />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/notebook"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <Notebook />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/ai-assistant"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <AIAssistant />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/settings"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <Settings />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/add-session"
-            element={
-              <ProtectedRoute>
-                <Layout>
-                  <AddSession />
-                </Layout>
-              </ProtectedRoute>
-            }
-          />
+            {/* Protected routes */}
+            <Route
+              path="/dashboard"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <StudyDashboard />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/study-plan"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <StudyPlan />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/notebook"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Notebook />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/ai-assistant"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <AIAssistant />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Settings />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/add-session"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <AddSession />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/edit-session/:sessionId"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <EditSession />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/analytics"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <Analytics />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
 
-          {/* Redirect root to dashboard */}
-          <Route path="/" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-        <Toaster />
+            {/* Redirect root to dashboard */}
+            <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          </Routes>
+          <Toaster />
+        </SubjectProvider>
       </AuthProvider>
     </Router>
   );

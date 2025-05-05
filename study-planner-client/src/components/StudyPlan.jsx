@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Calendar from './Calendar';
-import { Calendar as CalendarIcon, Clock, Plus } from 'lucide-react';
+import { Calendar as CalendarIcon, Clock, Plus, Target, Brain, Book, Award, PieChart } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { useToast } from "@/components/ui/use-toast";
@@ -21,6 +21,7 @@ const StudyPlan = () => {
 
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [animate, setAnimate] = useState(false);
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -31,6 +32,17 @@ const StudyPlan = () => {
       fetchSessions();
     }
   }, [user, authLoading, navigate]);
+
+  useEffect(() => {
+    if (!loading) {
+      // Start animations once data is loaded
+      const timer = setTimeout(() => {
+        setAnimate(true);
+      }, 300);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [loading]);
 
   const fetchSessions = async () => {
     try {
@@ -96,23 +108,31 @@ const StudyPlan = () => {
 
   const getSubjectColor = (subject) => {
     const colors = {
-      'Mathematics': '#4a90e2',
-      'Physics': '#e2844a',
-      'Chemistry': '#4ae28d',
-      'Biology': '#e24a4a',
-      'Computer Science': '#4a4ae2'
+      'Mathematics': '#4361ee',
+      'Physics': '#f72585',
+      'Chemistry': '#4cc9f0',
+      'Biology': '#7209b7',
+      'Computer Science': '#3a86ff'
     };
-    return colors[subject] || '#4a90e2';
+    return colors[subject] || '#4361ee';
   };
 
   const handleEventClick = (event) => {
     // Handle event click - show details or edit form
     console.log('Event clicked:', event);
+    toast({
+      title: event.title,
+      description: `${new Date(event.start).toLocaleTimeString()} - ${new Date(event.end).toLocaleTimeString()}`,
+      variant: "default",
+    });
   };
 
   const handleDateSelect = (selectInfo) => {
     // Handle date selection - show new session form
     console.log('Date selected:', selectInfo);
+    // Navigate to add session with pre-filled date
+    const startTime = selectInfo.startStr;
+    navigate(`/add-session?startTime=${encodeURIComponent(startTime)}`);
   };
 
   const handleAddSession = () => {
@@ -121,134 +141,177 @@ const StudyPlan = () => {
 
   if (loading) {
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        height: '100vh' 
-      }}>
-        Loading...
+      <div className="flex justify-center items-center h-screen">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
       </div>
     );
   }
 
+  // Calculate stats
+  const totalSessions = studyPlan.sessions.length;
+  const totalHours = studyPlan.sessions.reduce((total, session) => {
+    const start = new Date(session.startTime);
+    const end = new Date(session.endTime);
+    return total + (end - start) / (1000 * 60 * 60);
+  }, 0).toFixed(1);
+  
+  const hoursPerSubject = studyPlan.subjects.map(subject => {
+    const subjectSessions = studyPlan.sessions.filter(session => session.subject === subject);
+    const hours = subjectSessions.reduce((total, session) => {
+      const start = new Date(session.startTime);
+      const end = new Date(session.endTime);
+      return total + (end - start) / (1000 * 60 * 60);
+    }, 0).toFixed(1);
+    return { subject, hours };
+  });
+
   return (
-    <div style={{ 
-      maxWidth: '1200px',
-      margin: '0 auto',
-      padding: '20px'
-    }}>
-      <div style={{
-        marginBottom: '30px',
-        padding: '20px',
-        backgroundColor: 'white',
-        borderRadius: '8px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-      }}>
-        <div style={{
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'flex-start',
-          marginBottom: '20px'
-        }}>
+    <div className="max-w-7xl mx-auto p-6 space-y-8 page-transition">
+      {/* Header Section */}
+      <div className={`bg-card rounded-lg shadow-lg p-6 transition-all duration-500 ${animate ? 'opacity-100 scale-100' : 'opacity-0 scale-95'}`}>
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-4">
           <div>
-            <h1 style={{ 
-              margin: '0 0 10px 0',
-              fontSize: '24px',
-              color: '#333'
-            }}>
+            <h1 className="text-3xl font-bold text-gradient flex items-center">
+              <CalendarIcon className="mr-2 h-7 w-7" />
               {studyPlan.title}
             </h1>
-            <p style={{ 
-              margin: '0',
-              color: '#666'
-            }}>
+            <p className="text-gray-500 dark:text-gray-400 mt-1">
               {studyPlan.description}
             </p>
           </div>
           <Button 
             onClick={handleAddSession}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              backgroundColor: '#4a90e2',
-              color: 'white',
-              border: 'none',
-              padding: '8px 16px',
-              borderRadius: '4px',
-              cursor: 'pointer',
-              fontSize: '14px'
-            }}
+            variant="gradient"
+            className="shadow-md"
           >
-            <Plus size={16} />
+            <Plus className="mr-2 h-4 w-4" />
             Add Study Session
           </Button>
         </div>
-        <div style={{
-          display: 'flex',
-          gap: '20px',
-          alignItems: 'center'
-        }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <CalendarIcon size={20} color="#666" />
-            <span style={{ color: '#666' }}>
-              Weekly Goal: {studyPlan.weeklyGoal} hours
-            </span>
+        
+        <div className="flex flex-wrap gap-6 mt-4">
+          <div className="flex items-center rounded-full bg-primary/10 px-3 py-1">
+            <Target className="h-5 w-5 text-primary mr-2" />
+            <span>Weekly Goal: <strong>{studyPlan.weeklyGoal} hours</strong></span>
           </div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px'
-          }}>
-            <Clock size={20} color="#666" />
-            <span style={{ color: '#666' }}>
-              Subjects: {studyPlan.subjects.join(', ')}
-            </span>
+          
+          <div className="flex items-center rounded-full bg-accent/10 px-3 py-1">
+            <Clock className="h-5 w-5 text-accent-foreground mr-2" />
+            <span>Total: <strong>{totalHours} hours</strong></span>
+          </div>
+          
+          <div className="flex items-center rounded-full bg-success/10 px-3 py-1">
+            <Book className="h-5 w-5 text-success mr-2" />
+            <span>Subjects: <strong>{studyPlan.subjects.length}</strong></span>
           </div>
         </div>
       </div>
 
+      {/* Calendar */}
+      <div className={`transition-all duration-500 ${animate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
+        style={{ transitionDelay: '100ms' }}>
       <Calendar
         events={events}
-        onEventClick={handleEventClick}
         onDateSelect={handleDateSelect}
       />
-
-      <div className="p-6 space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h2 className="text-2xl font-bold">Study Progress</h2>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          <Card>
+
+      {/* Stats Section */}
+      <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+        <Card 
+          className={`hover-lift transition-all duration-500 ${animate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
+          style={{ transitionDelay: '200ms' }}
+        >
             <CardHeader>
               <CardTitle className="flex items-center">
-                <CalendarIcon className="mr-2 h-5 w-5 text-primary" />
+              <PieChart className="mr-2 h-5 w-5 text-primary" />
                 Weekly Overview
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
+            <div className="space-y-3">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Total Study Time</span>
-                  <span className="font-medium">0 hours</span>
+                <span className="font-medium">{totalHours} hours</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Sessions Completed</span>
-                  <span className="font-medium">0</span>
+                <span className="text-muted-foreground">Sessions Planned</span>
+                <span className="font-medium">{totalSessions}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-muted-foreground">Average Duration</span>
-                  <span className="font-medium">0 minutes</span>
+                <span className="text-muted-foreground">Progress to Goal</span>
+                <span className="font-medium">{Math.min(100, Math.round((totalHours / studyPlan.weeklyGoal) * 100))}%</span>
+              </div>
+              
+              <div className="mt-4">
+                <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-gradient-to-r from-primary to-accent-foreground transition-all duration-1000"
+                    style={{ 
+                      width: animate ? `${Math.min(100, Math.round((totalHours / studyPlan.weeklyGoal) * 100))}%` : '0%',
+                      transitionDelay: '500ms'
+                    }}
+                  ></div>
                 </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card 
+          className={`hover-lift transition-all duration-500 ${animate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
+          style={{ transitionDelay: '300ms' }}
+        >
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Brain className="mr-2 h-5 w-5 text-success" />
+              Subject Breakdown
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {hoursPerSubject.map((item, index) => (
+                <div key={item.subject} className="space-y-1">
+                  <div className="flex justify-between">
+                    <span className="text-sm">{item.subject}</span>
+                    <span className="text-sm font-medium">{item.hours}h</span>
+                  </div>
+                  <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                    <div 
+                      className="h-full rounded-full transition-all duration-1000"
+                      style={{ 
+                        backgroundColor: getSubjectColor(item.subject),
+                        width: animate ? `${Math.min(100, (item.hours / studyPlan.weeklyGoal) * 100)}%` : '0%',
+                        transitionDelay: `${500 + index * 100}ms`
+                      }}
+                    ></div>
+                  </div>
+                </div>
+              ))}
               </div>
             </CardContent>
           </Card>
+
+        <Card 
+          className={`hover-lift transition-all duration-500 ${animate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}
+          style={{ transitionDelay: '400ms' }}
+        >
+          <CardHeader>
+            <CardTitle className="flex items-center">
+              <Award className="mr-2 h-5 w-5 text-warning" />
+              Study Streak
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex flex-col items-center justify-center h-48">
+              <div className="text-5xl font-bold text-gradient mb-2">7</div>
+              <div className="text-xl font-medium mb-4">Days</div>
+              <p className="text-center text-sm text-muted-foreground">
+                You're on a roll! Keep studying daily to build your streak.
+              </p>
         </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );

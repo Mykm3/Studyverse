@@ -37,38 +37,36 @@ export default function UpcomingSessions() {
   return (
     <Card className="h-full">
       <CardHeader className="pb-2">
-        <CardTitle className="text-lg font-medium">Upcoming Study Sessions</CardTitle>
+        <CardTitle className="text-sm font-medium">Upcoming Sessions</CardTitle>
       </CardHeader>
       <CardContent>
-        <div className="space-y-4">
+        <div className="space-y-2">
           {sessions.map((session) => (
             <div
               key={session.id}
-              className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary/50 transition-colors"
+              className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary/50 transition-colors"
             >
               <div className="flex justify-between">
-                <h3 className="font-medium">{session.title}</h3>
+                <h3 className="font-medium text-sm">{session.title}</h3>
                 <div className="flex space-x-1">
-                  <Button variant="ghost" size="icon" className="h-6 w-6">
+                  <Button variant="ghost" size="icon" className="h-5 w-5">
                     <Edit className="h-3 w-3" />
                   </Button>
-                  <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive">
+                  <Button variant="ghost" size="icon" className="h-5 w-5 text-destructive">
                     <Trash className="h-3 w-3" />
                   </Button>
                 </div>
               </div>
-              <div className="mt-2 space-y-1">
-                <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                  <Calendar className="mr-2 h-3 w-3" />
+              <div className="mt-1 flex items-center space-x-3">
+                <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
+                  <Calendar className="mr-1 h-3 w-3" />
                   {session.date}
                 </div>
-                <div className="flex items-center text-sm text-gray-500 dark:text-gray-400">
-                  <Clock className="mr-2 h-3 w-3" />
+                <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
+                  <Clock className="mr-1 h-3 w-3" />
                   {session.time}
                 </div>
-              </div>
-              <div className="mt-2">
-                <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{session.topic}</span>
+                <span className="text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">{session.topic}</span>
               </div>
             </div>
           ))}

@@ -1,11 +1,21 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Calendar as CalendarIcon, Clock } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Calendar, Clock, Save, X, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
+import { Button } from "@/components/ui/Button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
+import { Textarea } from "@/components/ui/Textarea";
+import { Label } from "@/components/ui/Label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/Select";
+import { useSubjects } from '@/contexts/SubjectContext';
 
 const AddSession = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { toast } = useToast();
+  const { subjects } = useSubjects(); // Get subjects from context
+  
   const [formData, setFormData] = useState({
     subject: '',
     startTime: '',
@@ -13,6 +23,20 @@ const AddSession = () => {
     description: ''
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  // Check if we have a pre-filled start time from the URL query parameters
+  const queryParams = new URLSearchParams(location.search);
+  const startTimeParam = queryParams.get('startTime');
+  
+  // Set initial start time if provided in URL
+  useEffect(() => {
+    if (startTimeParam) {
+      setFormData(prev => ({
+        ...prev,
+        startTime: startTimeParam
+      }));
+    }
+  }, [startTimeParam]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -72,173 +96,145 @@ const AddSession = () => {
       [name]: value
     }));
   };
+  
+  const handleSelectChange = (value) => {
+    setFormData(prev => ({
+      ...prev,
+      subject: value
+    }));
+  };
+
+  // Check if subjects array is available
+  const hasSubjects = Array.isArray(subjects) && subjects.length > 0;
 
   return (
-    <div style={{ 
-      maxWidth: '600px',
-      margin: '40px auto',
-      padding: '20px'
-    }}>
-      <div style={{
-        backgroundColor: 'white',
-        borderRadius: '8px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-        padding: '30px'
-      }}>
-        <h1 style={{ 
-          margin: '0 0 30px 0',
-          fontSize: '24px',
-          color: '#333'
-        }}>
-          Add New Study Session
-        </h1>
+    <div className="container max-w-4xl mx-auto px-4 py-8">
+      <Button 
+        variant="ghost" 
+        onClick={() => navigate('/study-plan')}
+        className="mb-6"
+      >
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Back to Study Plan
+      </Button>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-          <div>
-            <label style={{ 
-              display: 'block',
-              marginBottom: '8px',
-              color: '#666',
-              fontWeight: '500'
-            }}>
-              Subject
-            </label>
-            <select
-              name="subject"
-              value={formData.subject}
-              onChange={handleChange}
-              required
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '4px',
-                border: '1px solid #ddd',
-                fontSize: '16px'
-              }}
-            >
-              <option value="">Select a subject</option>
-              <option value="Mathematics">Mathematics</option>
-              <option value="Physics">Physics</option>
-              <option value="Chemistry">Chemistry</option>
-              <option value="Biology">Biology</option>
-              <option value="Computer Science">Computer Science</option>
-            </select>
-          </div>
+      <Card className="border shadow-lg overflow-hidden hover:shadow-xl transition-all duration-300">
+        <CardHeader className="bg-gradient-to-r from-primary/80 to-primary/50 pb-8">
+          <CardTitle className="text-2xl font-bold text-white">Create New Study Session</CardTitle>
+          <p className="text-white/70 mt-1">Schedule your next productive study time</p>
+        </CardHeader>
+        <CardContent className="pt-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="subject">Subject</Label>
+              <Select 
+                value={formData.subject} 
+                onValueChange={handleSelectChange}
+                required
+              >
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select a subject" />
+                </SelectTrigger>
+                <SelectContent>
+                  {hasSubjects ? (
+                    subjects.map((subject) => (
+                      <SelectItem key={subject.id} value={subject.name}>
+                        {subject.name}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <div className="p-2 text-sm text-muted-foreground flex items-center">
+                      <AlertTriangle className="h-4 w-4 mr-2 text-warning" />
+                      No subjects available. Add subjects in Notebook.
+                    </div>
+                  )}
+                </SelectContent>
+              </Select>
+              {!hasSubjects && (
+                <p className="text-xs text-muted-foreground mt-1 flex items-center">
+                  <AlertTriangle className="h-3 w-3 mr-1 text-warning" />
+                  Add subjects in the Notebook page to see them here
+                </p>
+              )}
+            </div>
 
-          <div>
-            <label style={{ 
-              display: 'block',
-              marginBottom: '8px',
-              color: '#666',
-              fontWeight: '500'
-            }}>
-              Start Time
-            </label>
-            <input
-              type="datetime-local"
-              name="startTime"
-              value={formData.startTime}
-              onChange={handleChange}
-              required
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '4px',
-                border: '1px solid #ddd',
-                fontSize: '16px'
-              }}
-            />
-          </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="startTime" className="flex items-center">
+                  <Calendar className="h-4 w-4 mr-2 text-primary" />
+                  Start Time
+                </Label>
+                <Input
+                  type="datetime-local"
+                  id="startTime"
+                  name="startTime"
+                  value={formData.startTime}
+                  onChange={handleChange}
+                  required
+                  className="w-full"
+                />
+              </div>
 
-          <div>
-            <label style={{ 
-              display: 'block',
-              marginBottom: '8px',
-              color: '#666',
-              fontWeight: '500'
-            }}>
-              End Time
-            </label>
-            <input
-              type="datetime-local"
-              name="endTime"
-              value={formData.endTime}
-              onChange={handleChange}
-              required
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '4px',
-                border: '1px solid #ddd',
-                fontSize: '16px'
-              }}
-            />
-          </div>
+              <div className="space-y-2">
+                <Label htmlFor="endTime" className="flex items-center">
+                  <Clock className="h-4 w-4 mr-2 text-primary" />
+                  End Time
+                </Label>
+                <Input
+                  type="datetime-local"
+                  id="endTime"
+                  name="endTime"
+                  value={formData.endTime}
+                  onChange={handleChange}
+                  required
+                  className="w-full"
+                />
+              </div>
+            </div>
 
-          <div>
-            <label style={{ 
-              display: 'block',
-              marginBottom: '8px',
-              color: '#666',
-              fontWeight: '500'
-            }}>
-              Description (Optional)
-            </label>
-            <textarea
-              name="description"
-              value={formData.description}
-              onChange={handleChange}
-              style={{
-                width: '100%',
-                padding: '10px',
-                borderRadius: '4px',
-                border: '1px solid #ddd',
-                fontSize: '16px',
-                minHeight: '100px',
-                resize: 'vertical'
-              }}
-            />
-          </div>
+            <div className="space-y-2">
+              <Label htmlFor="description">Description (Optional)</Label>
+              <Textarea
+                id="description"
+                name="description"
+                value={formData.description}
+                onChange={handleChange}
+                placeholder="Add details about this study session"
+                className="min-h-[100px]"
+              />
+            </div>
 
-          <div style={{ display: 'flex', gap: '10px', marginTop: '20px' }}>
-            <button
-              type="submit"
-              disabled={isSubmitting}
-              style={{
-                flex: 1,
-                padding: '12px',
-                backgroundColor: isSubmitting ? '#ccc' : '#4a90e2',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                fontSize: '16px',
-                fontWeight: '500'
-              }}
-            >
-              {isSubmitting ? 'Creating...' : 'Create Session'}
-            </button>
-            <button
-              type="button"
-              onClick={() => navigate('/study-plan')}
-              disabled={isSubmitting}
-              style={{
-                flex: 1,
-                padding: '12px',
-                backgroundColor: '#f0f0f0',
-                color: '#333',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: isSubmitting ? 'not-allowed' : 'pointer',
-                fontSize: '16px',
-                fontWeight: '500'
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </form>
-      </div>
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => navigate('/study-plan')}
+                disabled={isSubmitting}
+              >
+                <X className="h-4 w-4 mr-2" />
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                disabled={isSubmitting || !hasSubjects}
+                className="bg-gradient-to-r from-primary to-blue-600 text-white hover:from-primary/90 hover:to-blue-700"
+              >
+                {isSubmitting ? (
+                  <>
+                    <div className="animate-spin mr-2 h-4 w-4 border-2 border-background border-t-transparent rounded-full" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4 mr-2" />
+                    Create Session
+                  </>
+                )}
+              </Button>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 };
