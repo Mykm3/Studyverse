@@ -98,16 +98,19 @@ export default function Sidebar() {
             </h1>
           )}
           <div className="flex items-center space-x-2">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleTheme}
-              className="transition-transform duration-500 hover:rotate-90"
-              title={isDark ? "Switch to light mode" : "Switch to dark mode"}
-              aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
-            >
-              {isDark ? <Sun size={18} className="text-warning" /> : <Moon size={18} className="text-accent-foreground" />}
-            </Button>
+            {/* Only show theme toggle when sidebar is not collapsed or on mobile */}
+            {(!isCollapsed || isMobile) && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleTheme}
+                className="transition-transform duration-500 hover:rotate-90"
+                title={isDark ? "Switch to light mode" : "Switch to dark mode"}
+                aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {isDark ? <Sun size={18} className="text-warning" /> : <Moon size={18} className="text-accent-foreground" />}
+              </Button>
+            )}
             {!isMobile && (
               <Button
                 variant="ghost"

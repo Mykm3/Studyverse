@@ -1,6 +1,22 @@
 import { Button } from "./ui/Button";
 
-export default function SubjectSelector({ subjects, selectedSubject, onSelectSubject }) {
+export default function SubjectSelector({ subjects, selectedSubject, onSelectSubject, loading }) {
+  if (loading) {
+    return (
+      <div className="flex justify-center py-4">
+        <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+      </div>
+    );
+  }
+  
+  if (!subjects || subjects.length === 0) {
+    return (
+      <div className="text-center py-4">
+        <p className="text-sm text-muted-foreground">No subjects available</p>
+      </div>
+    );
+  }
+  
   return (
     <div className="space-y-2">
       {subjects.map((subject) => (

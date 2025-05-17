@@ -11,34 +11,37 @@ export default function AuthCallback() {
 
   useEffect(() => {
     const handleCallback = async () => {
+      console.log('[AuthCallback] Processing OAuth callback');
       const params = new URLSearchParams(location.search);
       const token = params.get("token");
       const error = params.get("error");
 
       if (error) {
-        console.error("Authentication error:", error);
+        console.error("[AuthCallback] Authentication error:", error);
         showToast(decodeURIComponent(error), "error");
         navigate("/login");
         return;
       }
 
       if (!token) {
+        console.error("[AuthCallback] No authentication token received");
         showToast("No authentication token received", "error");
         navigate("/login");
         return;
       }
 
       try {
-        // Store the token in localStorage
+        console.log("[AuthCallback] Storing token in localStorage");
         localStorage.setItem("token", token);
         
-        // Fetch user data and update auth context
+        console.log("[AuthCallback] Checking authentication status");
         await checkAuth();
         
+        console.log("[AuthCallback] Authentication successful, redirecting to dashboard");
         showToast("Successfully signed in with Google!", "success");
         navigate("/dashboard");
       } catch (error) {
-        console.error("Error completing authentication:", error);
+        console.error("[AuthCallback] Error completing authentication:", error);
         showToast("Failed to complete Google sign in", "error");
         navigate("/login");
       }

@@ -56,8 +56,8 @@ export default function StudyDashboard() {
       >
         <Award className="h-10 w-10 mr-4" />
         <div className="flex-1">
-          <h3 className="font-bold text-lg">Study streak: 7 days!</h3>
-          <p>You're on a roll! Keep studying daily to maintain your streak.</p>
+          <h3 className="font-bold text-lg text-white">Study streak: 7 days!</h3>
+          <p className="text-white">You're on a roll! Keep studying daily to maintain your streak.</p>
         </div>
         <Link to="/analytics">
           <Button variant="default" size="sm" className="ml-auto bg-white/20 hover:bg-white/30">

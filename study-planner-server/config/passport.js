@@ -1,6 +1,7 @@
 const passport = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const User = require('../models/User');
+const jwt = require('jsonwebtoken');
 
 // Debug logging
 console.log('Passport configuration:');
@@ -26,6 +27,19 @@ const withRetry = async (operation, maxRetries = 3) => {
   }
 };
 
+// Helper function to generate JWT token
+const generateToken = (user) => {
+  return jwt.sign(
+    { 
+      id: user._id,
+      email: user.email,
+      displayName: user.displayName
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: '24h' }
+  );
+};
+
 passport.use(new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
@@ -34,7 +48,7 @@ passport.use(new GoogleStrategy({
   },
   async function(accessToken, refreshToken, profile, done) {
     try {
-      console.log('Google profile received:', {
+      console.log('[Passport] Google profile received:', {
         id: profile.id,
         email: profile.emails[0].value,
         displayName: profile.displayName
@@ -42,67 +56,57 @@ passport.use(new GoogleStrategy({
 
       // Validate profile data
       if (!profile || !profile.id || !profile.emails || !profile.emails[0]) {
-        console.error('Invalid profile data received from Google');
+        console.error('[Passport] Invalid profile data received from Google');
         return done(new Error('Invalid profile data received from Google'));
       }
 
       // Find or create user with retry logic
       let user;
       try {
+        console.log('[Passport] Searching for existing user with Google ID:', profile.id);
         user = await User.findOne({ googleId: profile.id }).maxTimeMS(5000);
+        
         if (user) {
-          console.log('Existing user found:', user.email);
+          console.log('[Passport] Existing user found:', {
+            id: user._id,
+            email: user.email,
+            displayName: user.displayName
+          });
           return done(null, user);
         }
       } catch (error) {
-        console.error('Error finding user:', error);
+        console.error('[Passport] Error finding user:', error);
       }
 
       try {
+        console.log('[Passport] Creating new user with Google profile');
         user = await User.create({
           googleId: profile.id,
           email: profile.emails[0].value,
           displayName: profile.displayName,
           photoUrl: profile.photos ? profile.photos[0].value : null
         });
-        console.log('New user created:', user.email);
+        
+        console.log('[Passport] New user created successfully:', {
+          id: user._id,
+          email: user.email,
+          displayName: user.displayName
+        });
+        
         return done(null, user);
       } catch (error) {
-        console.error('Error creating user:', error);
+        console.error('[Passport] Error creating user:', error);
         return done(error);
       }
     } catch (error) {
-      console.error('Error in Google strategy:', error);
+      console.error('[Passport] Error in Google strategy:', error);
       return done(error);
     }
   }
 ));
 
-passport.serializeUser((user, done) => {
-  try {
-    done(null, user.id);
-  } catch (error) {
-    console.error('Error in serializeUser:', error);
-    done(error);
-  }
-});
-
-passport.deserializeUser(async (id, done) => {
-  try {
-    const user = await withRetry(async () => {
-      const foundUser = await User.findById(id);
-      if (!foundUser) {
-        console.error('User not found during deserialization');
-        return false;
-      }
-      return foundUser;
-    });
-    
-    done(null, user);
-  } catch (error) {
-    console.error('Error in deserializeUser:', error);
-    done(error);
-  }
-});
-
-module.exports = passport; 
+// Export the generateToken function for use in auth routes
+module.exports = {
+  passport,
+  generateToken
+}; 

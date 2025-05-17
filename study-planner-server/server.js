@@ -3,10 +3,11 @@ require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
-const session = require("express-session");
-const passport = require("./config/passport");
+const { passport } = require("./config/passport");
 const authRoutes = require("./routes/auth");
 const studySessionRoutes = require('./routes/studySessions');
+const notesRoutes = require('./routes/notes');
+const diagnosticsRoutes = require('./routes/diagnostics');
 
 // Debug logging
 console.log('Server configuration:');
@@ -16,51 +17,20 @@ console.log('GOOGLE_CLIENT_SECRET:', process.env.GOOGLE_CLIENT_SECRET ? 'Present
 console.log('CLIENT_URL:', process.env.CLIENT_URL || 'http://localhost:5173');
 console.log('SERVER_URL:', process.env.SERVER_URL || 'http://localhost:5000');
 
-const app = express();
-
-// Middleware
-app.use(express.json());
-app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
-  credentials: true
-}));
-
-// Session configuration
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'study_planner_session_secret_2024',
-  resave: true,
-  saveUninitialized: true,
-  cookie: {
-    secure: false, // Set to false for development
-    httpOnly: true,
-    sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  },
-  name: 'study_planner_session'
-}));
-
-// Initialize Passport and restore authentication state from session
-app.use(passport.initialize());
-app.use(passport.session());
-
-// Add session debugging middleware
-app.use((req, res, next) => {
-  console.log('Session ID:', req.sessionID);
-  console.log('Session:', req.session);
-  next();
-});
-
 // MongoDB connection options
 const mongooseOptions = {
-  serverSelectionTimeoutMS: 60000, // Increase timeout to 60 seconds
-  socketTimeoutMS: 60000,
-  connectTimeoutMS: 60000,
+  serverSelectionTimeoutMS: 60000, // 60 seconds
+  socketTimeoutMS: 90000, // 90 seconds
+  connectTimeoutMS: 60000, // 60 seconds
   family: 4,
+  maxPoolSize: 10,
+  minPoolSize: 5,
+  heartbeatFrequencyMS: 5000, // Check connection every 5 seconds
   retryWrites: true,
   w: 'majority',
-  maxPoolSize: 10,
-  minPoolSize: 1,
-  heartbeatFrequencyMS: 10000
+  autoIndex: true,
+  maxIdleTimeMS: 60000, // Close idle connections after 1 minute
+  waitQueueTimeoutMS: 60000 // Wait queue timeout
 };
 
 // Connect to MongoDB with retry logic
@@ -69,27 +39,18 @@ const connectWithRetry = async () => {
   while (retries > 0) {
     try {
       console.log('Attempting to connect to MongoDB...');
-      // Log connection string without password
       const maskedUri = process.env.MONGODB_URI.replace(/:[^:]*@/, ':****@');
       console.log('Connection string:', maskedUri);
       
-      // Try connecting with options
       await mongoose.connect(process.env.MONGODB_URI, mongooseOptions);
       console.log('Successfully connected to MongoDB');
       return;
     } catch (error) {
       console.error('MongoDB connection error:', error.message);
-      console.error('Error details:', error);
       
-      // Handle specific error types
       if (error.name === 'MongoServerError' && error.message.includes('bad auth')) {
         console.error('Authentication failed. Please check your MongoDB credentials.');
-        console.error('Make sure your IP address is whitelisted in MongoDB Atlas.');
         process.exit(1);
-      }
-      
-      if (error.name === 'MongoNetworkError') {
-        console.error('Network error. Please check your internet connection and MongoDB Atlas IP whitelist.');
       }
       
       retries--;
@@ -110,11 +71,13 @@ mongoose.connection.on('connected', () => {
 
 mongoose.connection.on('error', err => {
   console.error('MongoDB connection error:', err);
+  // Don't exit on error, let the reconnection logic handle it
 });
 
 mongoose.connection.on('disconnected', () => {
   console.log('MongoDB disconnected. Attempting to reconnect...');
-  connectWithRetry();
+  // Add a small delay before attempting to reconnect
+  setTimeout(connectWithRetry, 1000);
 });
 
 mongoose.connection.on('reconnected', () => {
@@ -133,8 +96,33 @@ process.on('SIGINT', async () => {
   }
 });
 
+// Handle uncaught exceptions
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  // Don't exit, let the application continue running
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit, let the application continue running
+});
+
 // Initial connection
 connectWithRetry();
+
+const app = express();
+
+// Middleware
+app.use(express.json());
+app.use(cors({
+  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  credentials: true
+}));
+
+// Serve static files from the 'uploads' directory
+app.use('/uploads', express.static('uploads'));
+console.log('Serving static files from /uploads directory');
 
 // Debug middleware to log all requests
 app.use((req, res, next) => {
@@ -160,9 +148,25 @@ app.use('/api/auth', authRoutes);
 console.log('Mounting study sessions routes at /api/study-sessions');
 app.use('/api/study-sessions', studySessionRoutes);
 
+console.log('Mounting notes routes at /api/notes');
+app.use('/api/notes', notesRoutes);
+
+console.log('Mounting diagnostics routes at /api/diagnostics');
+app.use('/api/diagnostics', diagnosticsRoutes);
+
 // Protected route example
 app.get("/api/protected", (req, res) => {
   res.send("This is a protected route");
+});
+
+// Add authentication debugging middleware AFTER routes
+app.use((req, res, next) => {
+  console.log('Authentication status:', {
+    hasUser: Boolean(req.user),
+    userId: req.user?._id,
+    authHeader: req.headers.authorization ? 'Present' : 'Not present'
+  });
+  next();
 });
 
 // 404 handler

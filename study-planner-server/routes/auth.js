@@ -1,9 +1,9 @@
 const express = require('express');
 const passport = require('passport');
-const jwt = require('jsonwebtoken');
 const router = express.Router();
 const User = require('../models/User');
 const auth = require('../middleware/auth');
+const { generateToken } = require('../config/passport');
 
 // Helper function to handle MongoDB errors
 const handleMongoError = (error, res) => {
@@ -32,46 +32,23 @@ router.post('/register', async (req, res) => {
       return res.status(400).json({ message: 'All fields are required' });
     }
 
-    // Check if user already exists with retry logic
-    let existingUser;
-    try {
-      existingUser = await User.findOne({ email }).maxTimeMS(10000);
-    } catch (error) {
-      console.error('Error checking existing user:', error);
-      return res.status(503).json({ 
-        message: 'Database connection error. Please try again.',
-        error: error.message 
-      });
-    }
-
+    // Check if user already exists
+    const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({ message: 'User already exists' });
     }
 
-    // Create new user with retry logic
-    let user;
-    try {
-      user = new User({
-        email,
-        password,
-        displayName
-      });
+    // Create new user
+    const user = new User({
+      email,
+      password,
+      displayName
+    });
 
-      await user.save();
-    } catch (error) {
-      console.error('Error creating user:', error);
-      return res.status(503).json({ 
-        message: 'Database connection error. Please try again.',
-        error: error.message 
-      });
-    }
+    await user.save();
 
     // Generate JWT token
-    const token = jwt.sign(
-      { id: user._id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    const token = generateToken(user);
 
     res.status(201).json({
       token,
@@ -97,8 +74,8 @@ router.post('/login', async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required' });
     }
 
-    // Find user by email with timeout
-    const user = await User.findOne({ email }).maxTimeMS(5000);
+    // Find user by email
+    const user = await User.findOne({ email });
     if (!user) {
       return res.status(401).json({ message: 'Invalid email or password' });
     }
@@ -117,11 +94,7 @@ router.post('/login', async (req, res) => {
     }
 
     // Generate JWT token
-    const token = jwt.sign(
-      { id: user._id, email: user.email },
-      process.env.JWT_SECRET,
-      { expiresIn: '24h' }
-    );
+    const token = generateToken(user);
 
     res.json({
       token,
@@ -138,46 +111,43 @@ router.post('/login', async (req, res) => {
 
 // Google OAuth routes
 router.get('/google',
-  passport.authenticate('google', { scope: ['profile', 'email'] })
+  (req, res, next) => {
+    console.log('[Auth] Initiating Google OAuth flow');
+    passport.authenticate('google', { scope: ['profile', 'email'] })(req, res, next);
+  }
 );
 
 router.get('/google/callback',
-  passport.authenticate('google', { failureRedirect: '/login' }),
+  (req, res, next) => {
+    console.log('[Auth] Received Google OAuth callback');
+    passport.authenticate('google', { 
+      failureRedirect: '/login',
+      session: false // Disable session since we're using JWT
+    })(req, res, next);
+  },
   async (req, res) => {
     try {
+      console.log('[Auth] Google OAuth successful, user:', {
+        id: req.user._id,
+        email: req.user.email,
+        displayName: req.user.displayName
+      });
+
       // Generate JWT token
-      const token = jwt.sign(
-        { id: req.user._id, email: req.user.email },
-        process.env.JWT_SECRET,
-        { expiresIn: '24h' }
-      );
+      const token = generateToken(req.user);
+      console.log('[Auth] JWT token generated successfully');
 
       // Redirect to frontend with token
-      res.redirect(`${process.env.CLIENT_URL}/auth/callback?token=${token}`);
+      const redirectUrl = `${process.env.CLIENT_URL}/auth/callback?token=${token}`;
+      console.log('[Auth] Redirecting to:', redirectUrl);
+      
+      res.redirect(redirectUrl);
     } catch (error) {
-      console.error('Google OAuth callback error:', error);
-      res.redirect(`${process.env.CLIENT_URL}/login?error=oauth_failed`);
+      console.error('[Auth] Google OAuth callback error:', error);
+      res.redirect(`${process.env.CLIENT_URL}/login?error=${encodeURIComponent('OAuth authentication failed')}`);
     }
   }
 );
-
-// Verify JWT token middleware
-const verifyToken = (req, res, next) => {
-  const token = req.headers.authorization?.split(' ')[1];
-
-  if (!token) {
-    return res.status(401).json({ message: 'No token provided' });
-  }
-
-  try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    console.error('Token verification error:', error);
-    return res.status(401).json({ message: 'Invalid token', error: error.message });
-  }
-};
 
 // Get user profile
 router.get('/profile', auth, async (req, res) => {
@@ -193,15 +163,9 @@ router.get('/profile', auth, async (req, res) => {
   }
 });
 
-// Logout route
+// Logout route (client-side only)
 router.post('/logout', (req, res) => {
-  req.logout((err) => {
-    if (err) {
-      console.error('Logout error:', err);
-      return res.status(500).json({ message: 'Error logging out', error: err.message });
-    }
-    res.json({ message: 'Logged out successfully' });
-  });
+  res.json({ message: 'Logged out successfully' });
 });
 
 module.exports = router; 

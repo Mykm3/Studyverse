@@ -33,6 +33,7 @@ import { useToast } from "./ui/use-toast"
  * @property {Function} onAddHighlight - Function to call when adding highlight
  * @property {string} notes - Notes content
  * @property {Function} onNotesChange - Function to call when notes change
+ * @property {ReactNode} customContent - Custom content to render instead of the default document content
  */
 
 /**
@@ -47,6 +48,7 @@ export function DocumentViewer({
   onAddHighlight,
   notes,
   onNotesChange,
+  customContent,
 }) {
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("document")
@@ -154,39 +156,47 @@ export function DocumentViewer({
         </TabsList>
 
         <TabsContent value="document" className="flex-1 p-4 overflow-auto">
-          <div className="bg-white rounded-lg p-6 min-h-full" onMouseUp={handleTextSelection}>
-            {/* This would be replaced with an actual PDF viewer in a real app */}
-            <div className="prose max-w-none">
-              <h1>Integration Techniques</h1>
-              <h2>Chapter 1: Integration by Parts</h2>
-              <p>
-                Integration by parts is a technique used to find the integral of a product of functions. It is based on
-                the product rule for differentiation.
-              </p>
-              <div className="my-4 p-4 bg-muted rounded-md font-mono text-center">
-                ∫u(x)v'(x)dx = u(x)v(x) - ∫u'(x)v(x)dx
-              </div>
-              <p>
-                This formula is particularly useful when integrating products where one function becomes simpler when
-                differentiated and the other doesn't become too complex when integrated.
-              </p>
-              <h3>Example 1:</h3>
-              <p>Evaluate ∫x·e^x dx</p>
-              <p>
-                Let u = x and dv = e^x dx
-                <br />
-                Then du = dx and v = e^x
-              </p>
-              <div className="my-4 p-4 bg-muted rounded-md font-mono">
-                ∫x·e^x dx = x·e^x - ∫e^x dx
-                <br />= x·e^x - e^x + C<br />= e^x(x - 1) + C
-              </div>
-              <p>
-                This is just the beginning of integration techniques. In the following pages, we'll explore more complex
-                examples and additional methods for solving integrals.
-              </p>
+          {customContent ? (
+            // Render custom content if provided (e.g., iframe with PDF)
+            <div className="bg-white rounded-lg p-0 min-h-full">
+              {customContent}
             </div>
-          </div>
+          ) : (
+            // Default document content
+            <div className="bg-white rounded-lg p-6 min-h-full" onMouseUp={handleTextSelection}>
+              {/* This would be replaced with an actual PDF viewer in a real app */}
+              <div className="prose max-w-none">
+                <h1>Integration Techniques</h1>
+                <h2>Chapter 1: Integration by Parts</h2>
+                <p>
+                  Integration by parts is a technique used to find the integral of a product of functions. It is based on
+                  the product rule for differentiation.
+                </p>
+                <div className="my-4 p-4 bg-muted rounded-md font-mono text-center">
+                  ∫u(x)v'(x)dx = u(x)v(x) - ∫u'(x)v(x)dx
+                </div>
+                <p>
+                  This formula is particularly useful when integrating products where one function becomes simpler when
+                  differentiated and the other doesn't become too complex when integrated.
+                </p>
+                <h3>Example 1:</h3>
+                <p>Evaluate ∫x·e^x dx</p>
+                <p>
+                  Let u = x and dv = e^x dx
+                  <br />
+                  Then du = dx and v = e^x
+                </p>
+                <div className="my-4 p-4 bg-muted rounded-md font-mono">
+                  ∫x·e^x dx = x·e^x - ∫e^x dx
+                  <br />= x·e^x - e^x + C<br />= e^x(x - 1) + C
+                </div>
+                <p>
+                  This is just the beginning of integration techniques. In the following pages, we'll explore more complex
+                  examples and additional methods for solving integrals.
+                </p>
+              </div>
+            </div>
+          )}
 
           <div className="flex justify-between mt-4">
             <Button variant="outline" size="sm" onClick={handlePreviousPage} disabled={currentPage === 1}>

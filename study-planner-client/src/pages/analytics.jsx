@@ -112,8 +112,8 @@ export default function AnalyticsPage() {
             <div className="flex items-center">
               <Award className="h-10 w-10 mr-4" />
               <div>
-                <h3 className="font-bold text-lg">Consistency Champion!</h3>
-                <p>You've studied for 12 consecutive days. Keep up the great work!</p>
+                <h3 className="font-bold text-lg text-white">Consistency Champion!</h3>
+                <p className="text-white">You've studied for 12 consecutive days. Keep up the great work!</p>
               </div>
               <Button variant="default" size="sm" className="ml-auto bg-white/20 hover:bg-white/30">
                 View All Achievements
@@ -167,8 +167,8 @@ export default function AnalyticsPage() {
                   <div className="flex justify-between items-center">
                     <div>
                       <p className="text-sm text-white/80">{card.title}</p>
-                      <h3 className="text-2xl font-bold mt-1">{card.value}</h3>
-                      <p className={`text-xs mt-1 flex items-center`}>
+                      <h3 className="text-2xl font-bold mt-1 text-white">{card.value}</h3>
+                      <p className={`text-xs mt-1 flex items-center text-white/80`}>
                         {card.trend && (
                           <span className="flex items-center">
                             {card.trend === "up" ? 

@@ -16,6 +16,7 @@ import { SubjectProvider } from "@/contexts/SubjectContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AddSession from './pages/AddSession';
 import EditSession from './pages/EditSession';
+import TestUploadPage from './pages/test-upload';
 import { useState, useEffect } from 'react';
 
 // Animated page transition wrapper
@@ -142,6 +143,16 @@ function App() {
                 <ProtectedRoute>
                   <Layout>
                     <Analytics />
+                  </Layout>
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/test-upload"
+              element={
+                <ProtectedRoute>
+                  <Layout>
+                    <TestUploadPage />
                   </Layout>
                 </ProtectedRoute>
               }

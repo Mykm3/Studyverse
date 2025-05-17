@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { showToast } from "@/components/ui/Toaster";
+import api from "@/utils/api";
 
 const AuthContext = createContext(null);
 
@@ -16,30 +17,19 @@ export function AuthProvider({ children }) {
   const checkAuth = async () => {
     const token = localStorage.getItem("token");
     if (!token) {
+      console.log("[Auth] No token found in localStorage, user is not authenticated");
       setLoading(false);
       return;
     }
 
+    console.log("[Auth] Token found, verifying with server...");
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/profile`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      if (response.ok) {
-        const userData = await response.json();
-        setUser(userData);
-      } else {
-        // Token is invalid or expired
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        setUser(null);
-      }
+      const userData = await api.get('/api/auth/profile');
+      console.log("[Auth] User authenticated successfully:", userData);
+      setUser(userData);
     } catch (error) {
-      console.error("Auth check failed:", error);
+      console.error("[Auth] Auth check failed:", error);
       localStorage.removeItem("token");
-      localStorage.removeItem("user");
       setUser(null);
     } finally {
       setLoading(false);
@@ -48,26 +38,19 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/login`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Login failed");
+      const data = await api.post('/api/auth/login', { email, password });
+      console.log("[Auth] Login successful, received token:", data.token ? "Token received" : "No token received");
+      
+      if (!data.token) {
+        throw new Error("No authentication token received from server");
       }
-
+      
       localStorage.setItem("token", data.token);
       setUser(data.user);
       showToast("Successfully logged in!", "success");
       navigate("/dashboard");
     } catch (error) {
-      console.error("Login error:", error);
+      console.error("[Auth] Login error:", error);
       showToast(error.message, "error");
       throw error;
     }
@@ -75,20 +58,7 @@ export function AuthProvider({ children }) {
 
   const register = async (email, password, displayName) => {
     try {
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/register`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email, password, displayName }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Registration failed");
-      }
-
+      const data = await api.post('/api/auth/register', { email, password, displayName });
       localStorage.setItem("token", data.token);
       setUser(data.user);
       showToast("Account created successfully!", "success");
@@ -102,20 +72,11 @@ export function AuthProvider({ children }) {
 
   const logout = async () => {
     try {
-      const token = localStorage.getItem("token");
-      if (token) {
-        await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/auth/logout`, {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-      }
+      await api.post('/api/auth/logout');
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
       localStorage.removeItem("token");
-      localStorage.removeItem("user");
       setUser(null);
       showToast("Successfully logged out!", "success");
       navigate("/login");
