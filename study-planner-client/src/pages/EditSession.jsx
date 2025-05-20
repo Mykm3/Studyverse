@@ -76,7 +76,9 @@ const EditSession = () => {
       }
     };
 
-    fetchSession();
+    if (sessionId) {
+      fetchSession();
+    }
   }, [sessionId, navigate, toast, location.state]);
 
   // Helper function to format datetime for input
@@ -237,27 +239,21 @@ const EditSession = () => {
             <div className="space-y-2">
               <Label htmlFor="subject">Subject</Label>
               <Select 
-                value={formData.subject} 
-                onValueChange={handleSelectChange}
+                id="subject"
+                name="subject"
+                value={formData.subject}
+                onChange={(e) => handleChange(e)}
                 required
               >
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Select a subject" />
-                </SelectTrigger>
-                <SelectContent>
-                  {subjects.length > 0 ? (
-                    subjects.map((subject) => (
-                      <SelectItem key={subject.id} value={subject.name}>
-                        {subject.name}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <div className="p-2 text-sm text-muted-foreground flex items-center">
-                      <AlertTriangle className="h-4 w-4 mr-2 text-warning" />
-                      No subjects available. Add subjects in Notebook.
-                    </div>
-                  )}
-                </SelectContent>
+                {subjects.length > 0 ? (
+                  subjects.map((subject) => (
+                    <option key={subject.id} value={subject.name}>
+                      {subject.name}
+                    </option>
+                  ))
+                ) : (
+                  <option value="" disabled>No subjects available</option>
+                )}
               </Select>
             </div>
 

@@ -1,38 +1,74 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card";
-import { Button } from "@/components/ui/button"
-import { Clock, Calendar, Edit, Trash } from "lucide-react"
+import { Button } from "@/components/ui/Button";
+import { Clock, Calendar, Edit, Trash } from "lucide-react";
 
-export default function UpcomingSessions() {
-  const sessions = [
-    {
-      id: 1,
-      title: "React Hooks Deep Dive",
-      date: "Today",
-      time: "3:00 PM - 4:30 PM",
-      topic: "React",
-    },
-    {
-      id: 2,
-      title: "CSS Grid Layout",
-      date: "Tomorrow",
-      time: "10:00 AM - 11:30 AM",
-      topic: "CSS",
-    },
-    {
-      id: 3,
-      title: "JavaScript Promises",
-      date: "Mar 18",
-      time: "2:00 PM - 3:30 PM",
-      topic: "JavaScript",
-    },
-    {
-      id: 4,
-      title: "Next.js App Router",
-      date: "Mar 20",
-      time: "11:00 AM - 12:30 PM",
-      topic: "Next.js",
-    },
-  ]
+export default function UpcomingSessions({ sessions = [] }) {
+  // Use provided sessions, or fall back to sample data if empty
+  const displaySessions = sessions.length > 0 
+    ? sessions.map(session => ({
+        id: session.id || Math.random().toString(36).substring(7),
+        title: session.title || "Study Session",
+        date: session.startTime 
+          ? formatSessionDate(new Date(session.startTime)) 
+          : "Upcoming",
+        time: session.startTime 
+          ? formatSessionTime(new Date(session.startTime), session.duration) 
+          : "TBD",
+        topic: session.subject || "General",
+      }))
+    : [
+        {
+          id: 1,
+          title: "React Hooks Deep Dive",
+          date: "Today",
+          time: "3:00 PM - 4:30 PM",
+          topic: "React",
+        },
+        {
+          id: 2,
+          title: "CSS Grid Layout",
+          date: "Tomorrow",
+          time: "10:00 AM - 11:30 AM",
+          topic: "CSS",
+        },
+        {
+          id: 3,
+          title: "JavaScript Promises",
+          date: "Mar 18",
+          time: "2:00 PM - 3:30 PM",
+          topic: "JavaScript",
+        },
+      ];
+
+  // Helper function to format date
+  function formatSessionDate(date) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    
+    const sessionDate = new Date(date);
+    sessionDate.setHours(0, 0, 0, 0);
+    
+    if (sessionDate.getTime() === today.getTime()) {
+      return "Today";
+    } else if (sessionDate.getTime() === tomorrow.getTime()) {
+      return "Tomorrow";
+    } else {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+  }
+
+  // Helper function to format time
+  function formatSessionTime(date, duration = 60) {
+    const startTime = date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    const endTime = new Date(date.getTime() + duration * 60000);
+    const formattedEndTime = endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    return `${startTime} - ${formattedEndTime}`;
+  }
 
   return (
     <Card className="h-full">
@@ -41,7 +77,7 @@ export default function UpcomingSessions() {
       </CardHeader>
       <CardContent>
         <div className="space-y-2">
-          {sessions.map((session) => (
+          {displaySessions.map((session) => (
             <div
               key={session.id}
               className="p-2 rounded-lg border border-gray-200 dark:border-gray-700 hover:border-primary/50 transition-colors"
@@ -73,6 +109,6 @@ export default function UpcomingSessions() {
         </div>
       </CardContent>
     </Card>
-  )
+  );
 }
 

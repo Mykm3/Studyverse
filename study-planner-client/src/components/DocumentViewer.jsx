@@ -123,7 +123,7 @@ export function DocumentViewer({
 
   return (
     <div className="h-full flex flex-col">
-      <div className="border-b p-4 flex justify-between items-center">
+      <div className="p-4 flex justify-between items-center">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <BookOpen className="h-5 w-5 text-primary" />
           {document.title}
@@ -158,12 +158,12 @@ export function DocumentViewer({
         <TabsContent value="document" className="flex-1 p-4 overflow-auto">
           {customContent ? (
             // Render custom content if provided (e.g., iframe with PDF)
-            <div className="bg-white rounded-lg p-0 min-h-full">
+            <div className="bg-white rounded-lg p-0 min-h-full h-full flex flex-col">
               {customContent}
             </div>
           ) : (
             // Default document content
-            <div className="bg-white rounded-lg p-6 min-h-full" onMouseUp={handleTextSelection}>
+            <div className="bg-white rounded-lg p-6 min-h-full shadow-inner" onMouseUp={handleTextSelection}>
               {/* This would be replaced with an actual PDF viewer in a real app */}
               <div className="prose max-w-none">
                 <h1>Integration Techniques</h1>

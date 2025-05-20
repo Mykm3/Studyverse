@@ -24,9 +24,7 @@ async function downloadFromCloudinary(publicId, originalFilename, resourceType =
     const cloudinaryUrl = cloudinary.url(publicId, {
       secure: true,
       resource_type: resourceType,
-      type: 'upload',
-      flags: 'attachment',
-      download: true
+      type: 'upload'
     });
     
     console.log(`[Download] Generated Cloudinary URL: ${cloudinaryUrl}`);
@@ -68,6 +66,34 @@ async function downloadFromCloudinary(publicId, originalFilename, resourceType =
   }
 }
 
+/**
+ * Ensures a Cloudinary URL has proper parameters for PDF viewing
+ * @param {string} url The original Cloudinary URL
+ * @returns {string} URL with proper parameters for viewing
+ */
+function ensureInlineViewing(url) {
+  if (!url) return url;
+  
+  // Check if this is a Cloudinary URL
+  if (!url.includes('cloudinary.com')) return url;
+  
+  // Check if this is likely a PDF
+  const isProbablyPdf = url.toLowerCase().endsWith('.pdf') || 
+                        url.includes('/pdf') || 
+                        url.includes('/raw/');
+                        
+  if (!isProbablyPdf) return url;
+  
+  // For PDFs, we want to use the direct delivery URL
+  const cloudName = cloudinary.config().cloud_name;
+  const publicId = url.split('/').pop().split('.')[0]; // Extract public ID
+  const format = url.split('.').pop().toLowerCase();
+  
+  // Construct a direct delivery URL for PDFs without any transformation flags
+  return `https://res.cloudinary.com/${cloudName}/raw/upload/${publicId}.${format}`;
+}
+
 module.exports = {
-  downloadFromCloudinary
+  downloadFromCloudinary,
+  ensureInlineViewing
 }; 

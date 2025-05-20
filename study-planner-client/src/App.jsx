@@ -4,7 +4,7 @@ import Login from "@/components/Login";
 import Register from "@/components/Register";
 import AuthCallback from "@/components/AuthCallback";
 import StudyDashboard from "@/components/StudyDashboard";
-import StudyPlan from "@/components/StudyPlan";
+import StudyPlanPage from "./pages/studyplan";
 import Sidebar from "@/components/Sidebar";
 import Dashboard from "./pages/dashboard";
 import Notebook from "./pages/notebook";
@@ -18,6 +18,7 @@ import AddSession from './pages/AddSession';
 import EditSession from './pages/EditSession';
 import TestUploadPage from './pages/test-upload';
 import { useState, useEffect } from 'react';
+import { useToast } from "./lib/toast";
 
 // Animated page transition wrapper
 const PageTransition = ({ children }) => {
@@ -56,6 +57,9 @@ const Layout = ({ children }) => {
 };
 
 function App() {
+  // Initialize the global toast function
+  useToast();
+  
   return (
     <Router>
       <AuthProvider>
@@ -82,7 +86,7 @@ function App() {
               element={
                 <ProtectedRoute>
                   <Layout>
-                    <StudyPlan />
+                    <StudyPlanPage />
                   </Layout>
                 </ProtectedRoute>
               }

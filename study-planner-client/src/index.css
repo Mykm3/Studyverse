@@ -78,6 +78,10 @@
   /* Gradient colors */
   --gradient-start: #7c3aed;
   --gradient-end: #9333ea;
+  
+  /* PDF.js Express styles */
+  --pdfjs-primary-color: var(--primary-color, #3f67e0);
+  --pdfjs-border-color: var(--border, #e2e8f0);
 }
 
 .dark {
@@ -817,5 +821,34 @@ button:focus-visible {
 .bg-success .text-muted-foreground,
 .bg-accent .text-muted-foreground {
   color: rgba(255, 255, 255, 0.8);
+}
+
+/* Add styles for PDF.js Express viewer */
+.webviewer {
+  height: 100%;
+  width: 100%;
+}
+
+.webviewer-container {
+  height: 100%;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Ensure the iframe container takes full height */
+.iframe-container {
+  flex-grow: 1;
+  position: relative;
+  height: 100%;
+}
+
+/* Fix for Safari to ensure proper height of the viewer */
+@supports (-webkit-touch-callout: none) {
+  .webviewer {
+    height: -webkit-fill-available;
+  }
 }
 

@@ -9,84 +9,14 @@ console.log('[Upload] Cloudinary configuration:', {
   apiSecret: process.env.CLOUDINARY_API_SECRET ? 'Present' : 'Missing'
 });
 
-// Function to determine resource type based on file mimetype/extension
-const determineResourceType = (req, file) => {
-  const filename = file.originalname.toLowerCase();
-  
-  // List of formats that should use 'raw' resource_type
-  const rawFormats = [
-    '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx', 
-    '.txt', '.csv', '.json', '.xml', '.zip', '.rar'
-  ];
-  
-  // Check if the file extension indicates it should be a raw file
-  const shouldBeRaw = rawFormats.some(format => filename.endsWith(format));
-
-  // Office documents and binary files should use 'raw' resource_type
-  if (shouldBeRaw || 
-      file.mimetype.includes('officedocument') ||
-      file.mimetype.includes('msword') ||
-      file.mimetype.includes('ms-excel') ||
-      file.mimetype.includes('ms-powerpoint')) {
-    console.log(`[Upload] Using 'raw' resource type for file: ${filename}`);
-    return 'raw';
-  }
-  
-  // PDF files can use 'image' resource type with the PDF extension
-  if (file.mimetype === 'application/pdf' || filename.endsWith('.pdf')) {
-    console.log(`[Upload] Using 'image' resource type for PDF: ${filename}`);
-    return 'image';
-  }
-  
-  // Audio/video files use 'video' resource type
-  if (file.mimetype.includes('audio') || file.mimetype.includes('video')) {
-    console.log(`[Upload] Using 'video' resource type for media: ${filename}`);
-    return 'video';
-  }
-  
-  // Default to auto for everything else
-  console.log(`[Upload] Using 'auto' resource type for: ${filename}`);
-  return 'auto';
-};
-
 const storage = new CloudinaryStorage({
   cloudinary,
-  params: (req, file) => {
-    const resourceType = determineResourceType(req, file);
-    console.log(`[Upload] Preparing Cloudinary storage with resource_type: ${resourceType} for file: ${file.originalname}`);
-    
-    // Different allowed formats based on resource type
-    let allowed_formats;
-    
-    // For raw files, don't specify allowed_formats, as Cloudinary handles raw files differently
-    if (resourceType === 'raw') {
-      return {
-        folder: 'studyverse_notes',
-        resource_type: resourceType,
-        // For raw files, don't restrict formats to avoid Cloudinary validation issues
-        // This will let Cloudinary handle the raw file format detection
-        transformation: [{ quality: 'auto' }]
-      };
-    } else {
-      // For non-raw resources, specify the allowed formats
-      allowed_formats = [
-        // Document formats
-        'pdf', 
-        // Text formats
-        'txt', 'md', 'csv', 'json', 'xml',
-        // Media formats
-        'mp3', 'mp4', 'wav', 'ogg', 'webm',
-        // Image formats
-        'jpg', 'jpeg', 'png', 'gif', 'svg',
-      ];
-      
-      return {
-        folder: 'studyverse_notes',
-        resource_type: resourceType,
-        allowed_formats,
-        transformation: [{ quality: 'auto' }]
-      };
-    }
+  params: {
+    folder: 'studyverse_notes',
+    resource_type: 'auto',
+    allowed_formats: ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'mp4', 'webm', 'mp3', 'wav'],
+    type: 'upload',
+    transformation: []
   }
 });
 
@@ -147,6 +77,13 @@ const upload = (fieldName) => {
         if (err.message && err.message.includes('file format not allowed')) {
           return res.status(400).json({
             error: 'File format not supported by the storage provider. Please try a different file format.'
+          });
+        }
+
+        // Check for Cloudinary API errors
+        if (err.http_code === 400 || err.http_code === 401 || err.http_code === 403) {
+          return res.status(500).json({
+            error: 'Cloudinary configuration error. Please check your API credentials and settings.'
           });
         }
 

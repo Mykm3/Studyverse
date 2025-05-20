@@ -456,7 +456,7 @@ export default function NotebookPage() {
 
   return (
     <div className="container mx-auto p-4">
-      <header className="flex justify-between items-center mb-6 py-4 border-b">
+      <header className="flex justify-between items-center mb-6 py-4">
         <div className="flex items-center gap-2">
           <Notebook className="h-8 w-8 text-primary" />
           <h1 className="text-2xl font-bold text-foreground">Notebook</h1>
@@ -487,7 +487,7 @@ export default function NotebookPage() {
       <div className="grid grid-cols-12 gap-6">
         {/* Sidebar */}
         <div className="col-span-12 md:col-span-3 space-y-6">
-          <Card>
+          <Card className="shadow-md hover:shadow-lg transition-all duration-300">
             <CardContent className="p-6">
               <div className="flex flex-col items-center">
                 <h2 className="text-lg font-semibold mb-4">Overall Progress</h2>
@@ -521,7 +521,7 @@ export default function NotebookPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="shadow-md hover:shadow-lg transition-all duration-300">
             <CardContent className="p-6">
               <h2 className="text-lg font-semibold mb-4">Subjects</h2>
               <SubjectSelector

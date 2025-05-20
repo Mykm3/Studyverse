@@ -23,22 +23,37 @@ const Calendar = ({ events, onDateSelect }) => {
     
     return () => clearTimeout(timer);
   }, []);
+  
+  // Debug the events being received
+  useEffect(() => {
+    if (events && events.length > 0) {
+      console.log('Calendar received events:', JSON.stringify(events, null, 2));
+    }
+  }, [events]);
 
   const handleEventClick = (clickInfo) => {
     const event = clickInfo.event;
     const eventId = event.id;
     
-    // Navigate to edit session page with the event ID
-    navigate(`/edit-session/${eventId}`, {
-      state: { 
-        session: {
-          subject: event.title,
-          startTime: event.start,
-          endTime: event.end,
-          description: event.extendedProps.description
+    // Check if the user wants to edit or start the session
+    const startSession = window.confirm("Do you want to start this study session? Click OK to start, or Cancel to edit.");
+    
+    if (startSession) {
+      // Navigate to the study session page with the session ID
+      navigate(`/study-session?sessionId=${eventId}`);
+    } else {
+      // Navigate to edit session page with the event ID
+      navigate(`/edit-session/${eventId}`, {
+        state: { 
+          session: {
+            subject: event.title,
+            startTime: event.start,
+            endTime: event.end,
+            description: event.extendedProps.description
+          }
         }
-      }
-    });
+      });
+    }
   };
 
   const handleDateSelect = (selectInfo) => {
@@ -94,10 +109,10 @@ const Calendar = ({ events, onDateSelect }) => {
   // Custom rendering for events
   const renderEventContent = (eventInfo) => {
     return (
-      <div className="fc-event-main-content p-1 overflow-hidden cursor-pointer">
-        <div className="font-medium">{eventInfo.event.title}</div>
+      <div className="fc-event-main-content p-2 overflow-hidden cursor-pointer" style={{fontWeight: 'bold'}}>
+        <div className="font-bold">{eventInfo.event.title}</div>
         {selectedView !== 'dayGridMonth' && (
-          <div className="text-xs flex items-center opacity-90">
+          <div className="text-xs flex items-center opacity-100">
             <Clock className="mr-1 h-3 w-3" />
             {eventInfo.timeText}
           </div>
@@ -177,49 +192,128 @@ const Calendar = ({ events, onDateSelect }) => {
             .fc-day-today {
               background-color: var(--accent-color) !important;
             }
+            
+            /* Basic event styling */
             .fc-event {
               border-radius: 6px;
               border: none !important;
-              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              box-shadow: 0 2px 4px rgba(0,0,0,0.2);
               transition: transform 0.2s ease, box-shadow 0.2s ease;
+              font-weight: 600 !important;
+              opacity: 1 !important;
             }
+            
             .fc-event:hover {
               transform: translateY(-2px);
-              box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+              box-shadow: 0 4px 8px rgba(0,0,0,0.25);
               cursor: pointer;
             }
+            
+            /* Header styling */
             .fc-col-header-cell {
               background-color: var(--card-background);
               padding: 10px 0;
               font-weight: 600;
             }
+            
+            /* Grid styling */
             .fc .fc-scrollgrid {
               border-radius: 8px;
               border: 1px solid var(--border-color);
             }
+            
             .fc .fc-scrollgrid-section > td {
               border: 1px solid var(--border-color);
             }
+            
             .fc-theme-standard .fc-scrollgrid {
               border: 1px solid var(--border-color);
             }
+            
             .fc-theme-standard td, .fc-theme-standard th {
               border: 1px solid var(--border-color);
             }
+            
             .fc .fc-daygrid-day.fc-day-today {
               background-color: var(--accent-color);
               opacity: 0.2;
             }
+            
+            /* Remove now indicator */
             .fc .fc-timegrid-now-indicator-line {
-              border-color: var(--primary-color);
-              border-width: 2px;
+              display: none !important;
             }
+            
             .fc .fc-timegrid-now-indicator-arrow {
-              border-color: var(--primary-color);
-              border-width: 2px;
+              display: none !important;
             }
-            .fc-direction-ltr .fc-daygrid-event.fc-event-end, .fc-direction-rtl .fc-daygrid-event.fc-event-start {
+            
+            /* Month view event styling */
+            .fc-daygrid-event {
               padding: 2px 4px;
+            }
+            
+            .fc-daygrid-dot-event .fc-event-title {
+              font-weight: bold !important;
+            }
+            
+            /* Force vivid text colors */
+            .fc-v-event .fc-event-title,
+            .fc-h-event .fc-event-title,
+            .fc-daygrid-event .fc-event-title {
+              color: white !important;
+              font-weight: 700 !important;
+              text-shadow: 0px 1px 2px rgba(0,0,0,0.3);
+              letter-spacing: 0.02em;
+              margin: 2px 0;
+            }
+            
+            .fc-event-time {
+              color: white !important;
+              font-weight: 600 !important;
+              opacity: 1 !important;
+            }
+            
+            /* Force visibility in all views */
+            .fc-timegrid-event-harness, 
+            .fc-daygrid-event-harness {
+              visibility: visible !important;
+              opacity: 1 !important;
+            }
+            
+            /* Make content stand out */
+            .fc-event-main-content {
+              font-weight: 700 !important;
+              padding: 3px 6px !important;
+            }
+            
+            /* Fix for month view link */
+            .fc-daygrid-more-link {
+              color: var(--primary-color);
+              font-weight: 600;
+            }
+            
+            /* Add vivid borders */
+            .fc-daygrid-event {
+              border-left: 3px solid rgba(0,0,0,0.3) !important;
+            }
+            
+            /* Fix week and day view event colors */
+            .fc-timegrid-event-harness .fc-timegrid-event {
+              box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3) !important;
+              border-left: 4px solid rgba(0, 0, 0, 0.3) !important;
+              opacity: 1 !important;
+            }
+            
+            /* Ensure events display in all views */
+            .fc-timeGridDay-view .fc-timegrid-slots,
+            .fc-timeGridWeek-view .fc-timegrid-slots {
+              z-index: 0 !important;
+            }
+
+            .fc-v-event, .fc-h-event {
+              opacity: 1 !important;
+              z-index: 10 !important;
             }
           `}</style>
           
@@ -231,7 +325,7 @@ const Calendar = ({ events, onDateSelect }) => {
             editable={true}
             selectable={true}
             selectMirror={true}
-            dayMaxEvents={true}
+            dayMaxEvents={3}
             weekends={true}
             events={events}
             eventClick={handleEventClick}
@@ -242,7 +336,39 @@ const Calendar = ({ events, onDateSelect }) => {
             allDaySlot={false}
             expandRows={true}
             stickyHeaderDates={true}
-            nowIndicator={true}
+            nowIndicator={false}
+            forceEventDuration={true}
+            eventDisplay="block"
+            eventOrder="start"
+            eventDidMount={(info) => {
+              // Direct DOM styling for vivid colors
+              if (info.event.backgroundColor) {
+                // Make event background color vibrant
+                const color = info.event.backgroundColor;
+                
+                // Apply vivid styling to the entire event element
+                info.el.style.backgroundColor = color;
+                info.el.style.borderColor = color;
+                info.el.style.color = '#ffffff';
+                info.el.style.fontWeight = '700';
+                
+                // Apply styles to inner elements
+                const title = info.el.querySelector('.fc-event-title');
+                const time = info.el.querySelector('.fc-event-time');
+                
+                if (title) {
+                  title.style.fontWeight = '700';
+                  title.style.color = '#ffffff';
+                  title.style.textShadow = '0px 1px 2px rgba(0,0,0,0.3)';
+                }
+                
+                if (time) {
+                  time.style.fontWeight = '600';
+                  time.style.color = '#ffffff';
+                  time.style.opacity = '1';
+                }
+              }
+            }}
             eventContent={renderEventContent}
             eventTimeFormat={{
               hour: '2-digit',
