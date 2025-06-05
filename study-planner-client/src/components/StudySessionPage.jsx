@@ -17,6 +17,17 @@ import axios from "axios"
 // API base URL
 const API_BASE_URL = "http://localhost:5000";
 
+// Helper function to get auth headers
+const getAuthHeaders = () => {
+  const token = localStorage.getItem('token');
+  return {
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': token ? `Bearer ${token}` : ''
+    }
+  };
+};
+
 export function StudySessionPage() {
   const navigate = useNavigate()
   const { toast } = useToast()
@@ -65,7 +76,11 @@ export function StudySessionPage() {
     if (session.document?.type === 'pdf' && session.document?.id && 
         session.document?.fileUrl && !session.document.fileUrl.includes('/view-pdf/')) {
       console.log("Enforcing view-pdf endpoint for PDF document");
-      const viewPdfUrl = `${API_BASE_URL}/api/notes/view-pdf/${session.document.id}`;
+      
+      // Add token to URL for authentication
+      const token = localStorage.getItem('token');
+      const viewPdfUrl = `${API_BASE_URL}/api/notes/view-pdf/${session.document.id}?token=${token}`;
+      
       setSession(prev => ({
         ...prev,
         document: {
@@ -105,29 +120,7 @@ export function StudySessionPage() {
     setIframeError(null);
     
     try {
-      // Get the auth token from localStorage
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        toast({
-          title: "Authentication Error",
-          description: "You need to be logged in to access this page.",
-          variant: "destructive"
-        });
-        navigate('/login');
-        return;
-      }
-
-      // Set up request headers with auth token
-      const config = {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      };
-
-      console.log("Fetching study session document:", sessionId);
-
-      // Fetch the study session with its documents
+      const config = getAuthHeaders();
       const response = await axios.get(`${API_BASE_URL}/api/study-sessions/${sessionId}`, config);
       
       if (response.data) {
@@ -146,8 +139,10 @@ export function StudySessionPage() {
           
           // Always use our dedicated viewing endpoint for PDFs 
           if (fileType === 'pdf') {
-            viewUrl = `${API_BASE_URL}/api/notes/view-pdf/${document.id}`;
-            console.log("Using PDF viewing endpoint:", viewUrl);
+            // Add token to URL for authentication
+            const token = localStorage.getItem('token');
+            viewUrl = `${API_BASE_URL}/api/notes/view-pdf/${document.id}?token=${token}`;
+            console.log("Using PDF viewing endpoint with auth:", viewUrl);
           } else {
             viewUrl = document.fileUrl;
             console.log("Using standard document URL:", viewUrl);
@@ -235,28 +230,11 @@ export function StudySessionPage() {
     setIframeLoading(true);
     setIframeError(null);
     try {
-      // Get the auth token from localStorage
-      const token = localStorage.getItem('token');
-      
-      if (!token) {
-        toast({
-          title: "Authentication Error",
-          description: "You need to be logged in to access this page.",
-          variant: "destructive"
-        });
-        navigate('/login');
-        return;
-      }
-
-      // Set up request headers with auth token
-      const config = {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      };
-
-      // If we have a subject in the session, try to get documents for that subject first
+      const config = getAuthHeaders();
       let response;
+      let viewUrl;
+      
+      // If we have a subject in the session, try to get documents for that subject first
       if (session.subject && session.subject !== "Study Session") {
         console.log(`Fetching documents for subject: ${session.subject}`);
         
@@ -287,12 +265,10 @@ export function StudySessionPage() {
         const fileType = document.fileUrl?.split('.').pop().toLowerCase() || 'pdf';
         
         // Determine the appropriate URL to use
-        let viewUrl;
-        
-        // Always use our dedicated endpoint for PDFs
         if (fileType === 'pdf') {
-          viewUrl = `${API_BASE_URL}/api/notes/view-pdf/${document._id}`;
-          console.log("Using PDF viewing endpoint:", viewUrl);
+          // Add auth token to PDF URL as a query parameter
+          const token = localStorage.getItem('token');
+          viewUrl = `${API_BASE_URL}/api/notes/view-pdf/${document._id}?token=${token}`;
         } else {
           // For non-PDFs, prioritize secure Cloudinary URL if available
           viewUrl = document.cloudinaryUrl || document.fileUrl || document.originalFileUrl;
@@ -676,7 +652,8 @@ export function StudySessionPage() {
           setIframeError("Trying alternative document source...");
           
           // Always use our dedicated view-pdf endpoint which ensures proper headers
-          const newUrl = `${API_BASE_URL}/api/notes/view-pdf/${session.document.id}`;
+          const token = localStorage.getItem('token');
+          const newUrl = `${API_BASE_URL}/api/notes/view-pdf/${session.document.id}?token=${token}`;
           console.log("Using view-pdf endpoint URL:", newUrl);
             
           // Update the document URL to use the view-pdf endpoint
@@ -698,11 +675,12 @@ export function StudySessionPage() {
         }
       };
 
-      // Function to generate a direct download link
+      // Function to generate a direct download link with auth token
       const handleDirectDownload = async () => {
         try {
-          // Always get a fresh download URL with download parameter
-          const downloadUrl = `${API_BASE_URL}/api/notes/download/${session.document.id}?download=true`;
+          // Always get a fresh download URL with download parameter and auth token
+          const token = localStorage.getItem('token');
+          const downloadUrl = `${API_BASE_URL}/api/notes/download/${session.document.id}?download=true&token=${token}`;
           
           toast({
             title: "Opening Document",

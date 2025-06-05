@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
-import { Clock, Calendar, ChevronRight, BarChart2, AlertCircle } from "lucide-react"
+import { Clock, Calendar, ChevronRight } from "lucide-react"
 import { Link } from "react-router-dom"
 import { useState, useEffect } from "react"
 
@@ -48,27 +48,17 @@ export default function UpcomingStudySessions({ animate = false }) {
     fetchSessions();
   }, []);
 
-  // Function to format time from a date string (e.g., "2:00 PM - 3:30 PM")
+  // Function to format time from a date string (e.g., "02:12 PM - 04:06 PM")
   const formatTimeRange = (startTime, endTime) => {
     const start = new Date(startTime);
     const end = new Date(endTime);
     return `${start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${end.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
   };
 
-  // Function to format date (e.g., "Today", "Tomorrow", or "Mar 18")
+  // Function to format date (e.g., "Jun 7")
   const formatDate = (dateString) => {
     const date = new Date(dateString);
-    const today = new Date();
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    
-    if (date.toDateString() === today.toDateString()) {
-      return "Today";
-    } else if (date.toDateString() === tomorrow.toDateString()) {
-      return "Tomorrow";
-    } else {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    }
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
   };
 
   // Function to calculate duration in minutes
@@ -78,60 +68,77 @@ export default function UpcomingStudySessions({ animate = false }) {
     return Math.round((end - start) / (1000 * 60));
   };
 
-  // Function to get priority color
-  const getPriorityStyle = (priority) => {
-    switch (priority?.toLowerCase()) {
-      case 'high':
-        return "bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400";
-      case 'medium':
-        return "bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400";
-      case 'low':
-        return "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400";
-      default:
-        return "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400";
-    }
-  };
-
   // Create some demo sessions if no sessions from API or for development
   const demoSessions = [
     {
       id: 1,
-      title: "Calculus II",
-      subject: "Practice Problems - High Priority",
-      startTime: new Date(new Date().setHours(14, 0, 0, 0)),
-      endTime: new Date(new Date().setHours(15, 30, 0, 0)),
-      priority: "High",
+      title: "Database",
+      subject: "Database",
+      startTime: (() => {
+        const date = new Date();
+        date.setDate(date.getDate() + 1);
+        date.setHours(14, 0, 0, 0);
+        return date;
+      })(),
+      endTime: (() => {
+        const date = new Date();
+        date.setDate(date.getDate() + 1);
+        date.setHours(16, 0, 0, 0);
+        return date;
+      })(),
+      priority: "Normal",
     },
     {
       id: 2,
-      title: "Data Structures",
-      subject: "Binary Trees & Traversal",
-      startTime: new Date(new Date().setHours(11, 30, 0, 0)),
-      endTime: new Date(new Date().setHours(12, 30, 0, 0)),
-      priority: "Medium",
+      title: "System Analysis",
+      subject: "System Analysis",
+      startTime: (() => {
+        const date = new Date();
+        date.setDate(date.getDate() + 5);
+        date.setHours(8, 12, 0, 0);
+        return date;
+      })(),
+      endTime: (() => {
+        const date = new Date();
+        date.setDate(date.getDate() + 5);
+        date.setHours(10, 12, 0, 0);
+        return date;
+      })(),
+      priority: "Normal",
     },
     {
       id: 3,
-      title: "Physics",
-      subject: "Review Session",
-      startTime: new Date(new Date().setHours(16, 0, 0, 0)),
-      endTime: new Date(new Date().setHours(16, 45, 0, 0)),
-      priority: "Low",
+      title: "Electronics",
+      subject: "Electronics",
+      startTime: (() => {
+        const date = new Date();
+        date.setDate(date.getDate() + 9);
+        date.setHours(15, 26, 0, 0);
+        return date;
+      })(),
+      endTime: (() => {
+        const date = new Date();
+        date.setDate(date.getDate() + 9);
+        date.setHours(17, 26, 0, 0);
+        return date;
+      })(),
+      priority: "Normal",
     },
   ];
 
+  // Use real sessions if available, otherwise use demo sessions
   const displaySessions = sessions.length > 0 ? sessions : demoSessions;
 
   return (
-    <Card className="h-full hover-lift">
+    <Card className="h-full">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="flex items-center">
-          <Calendar className="h-4 w-4 mr-2 text-primary" />
+          <Calendar className="h-5 w-5 mr-2 text-primary" />
           Upcoming Sessions
         </CardTitle>
-        <Link to="/analytics">
+        <Link to="/study-plan">
           <Button size="sm" variant="ghost">
-            <BarChart2 className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" />
           </Button>
         </Link>
       </CardHeader>
@@ -142,49 +149,35 @@ export default function UpcomingStudySessions({ animate = false }) {
           </div>
         ) : error ? (
           <div className="text-center py-6">
-            <AlertCircle className="h-5 w-5 mx-auto mb-2 text-destructive" />
-            <p className="text-sm text-destructive">Failed to load sessions</p>
+            <p className="text-sm text-muted-foreground">Failed to load sessions</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {displaySessions.map((session) => (
-              <div 
-                key={session.id}
-                className="p-2 border rounded-lg overflow-hidden hover:border-primary/50 transition-colors"
-              >
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h3 className="font-medium text-sm">{session.title}</h3>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">{session.subject}</p>
-                    <div className="flex items-center mt-1 space-x-2">
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {calculateDuration(session.startTime, session.endTime)} min
-                      </span>
-                      <span
-                        className={`text-xs px-1.5 py-0.5 rounded-full ${getPriorityStyle(session.priority)}`}
-                      >
-                        {session.priority || "Normal"}
-                      </span>
+          <div className="space-y-4">
+            {displaySessions.map((session) => {
+              const duration = calculateDuration(session.startTime, session.endTime);
+              const subject = session.subject || session.title;
+              const date = formatDate(session.startTime);
+              const timeRange = formatTimeRange(session.startTime, session.endTime);
+              
+              return (
+                <Link 
+                  key={session.id}
+                  to={`/study-plan?session=${session.id}`}
+                  className="block border rounded-lg p-4 hover:border-primary/50 transition-colors"
+                >
+                  <div className="flex flex-col">
+                    <h3 className="font-medium">{subject}</h3>
+                    <div className="text-sm text-muted-foreground">{duration} min</div>
+                    <div className="flex items-center mt-2 text-sm text-muted-foreground">
+                      <Calendar className="h-4 w-4 mr-1" />
+                      <span className="mr-4">{date}</span>
+                      <Clock className="h-4 w-4 mr-1" />
+                      <span>{timeRange}</span>
                     </div>
                   </div>
-                  <Link to={`/studyplan?session=${session.id}`}>
-                    <Button size="icon" variant="ghost" className="h-5 w-5">
-                      <ChevronRight className="h-3 w-3" />
-                    </Button>
-                  </Link>
-                </div>
-                <div className="mt-1 flex items-center space-x-3">
-                  <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
-                    <Calendar className="mr-1 h-3 w-3" />
-                    {formatDate(session.startTime)}
-                  </div>
-                  <div className="flex items-center text-xs text-gray-500 dark:text-gray-400">
-                    <Clock className="mr-1 h-3 w-3" />
-                    {formatTimeRange(session.startTime, session.endTime)}
-                  </div>
-                </div>
-              </div>
-            ))}
+                </Link>
+              );
+            })}
           </div>
         )}
       </CardContent>

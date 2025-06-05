@@ -11,6 +11,7 @@ import StudyPlan from "../components/StudyPlan";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
+import { useSubjects } from "../contexts/SubjectContext";
 
 // Generate a color based on subject name
 export const getSubjectColor = (subject) => {
@@ -47,6 +48,7 @@ export default function StudyPlanPage() {
   const [activeTab, setActiveTab] = useState("plan");
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { subjects } = useSubjects();
   
   // State for the enhanced view tab
   const [searchQuery, setSearchQuery] = useState("");
@@ -249,13 +251,7 @@ export default function StudyPlanPage() {
                 <Button variant="outline" size="sm" className="bg-primary/10">
                   Month
                 </Button>
-                <Button 
-                  variant="outline"
-                  size="sm"
-                  onClick={createDummySession}
-                >
-                  Test
-                </Button>
+                
               </div>
             </div>
 
@@ -435,7 +431,10 @@ export default function StudyPlanPage() {
                         <div className="grid grid-cols-2 gap-4 mb-4">
                           <div>
                             <label className="text-sm font-medium mb-1 block">Subject</label>
-                            <select className="w-full p-2 rounded-md border border-border bg-background">
+                            <select 
+                              className="w-full p-2 rounded-md border border-border bg-background"
+                              id="quickSessionSubject"
+                            >
                               {sessions.reduce((subjects, session) => {
                                 if (!subjects.includes(session.subject)) {
                                   subjects.push(session.subject);
@@ -450,16 +449,71 @@ export default function StudyPlanPage() {
                           </div>
                           <div>
                             <label className="text-sm font-medium mb-1 block">Duration</label>
-                            <select className="w-full p-2 rounded-md border border-border bg-background">
-                              <option>30 minutes</option>
-                              <option>45 minutes</option>
-                              <option>60 minutes</option>
-                              <option>90 minutes</option>
-                              <option>120 minutes</option>
+                            <select 
+                              className="w-full p-2 rounded-md border border-border bg-background"
+                              id="quickSessionDuration"
+                            >
+                              <option value="30">30 minutes</option>
+                              <option value="45">45 minutes</option>
+                              <option value="60">60 minutes</option>
+                              <option value="90">90 minutes</option>
+                              <option value="120">120 minutes</option>
                             </select>
                           </div>
                         </div>
-                        <Button className="w-full bg-primary hover:bg-primary/90">
+                        <Button 
+                          className="w-full bg-primary hover:bg-primary/90"
+                          onClick={() => {
+                            const subject = document.getElementById("quickSessionSubject").value;
+                            const durationMinutes = parseInt(document.getElementById("quickSessionDuration").value);
+                            
+                            // Create start and end times
+                            const startTime = new Date();
+                            const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
+                            
+                            // Create session payload
+                            const sessionData = {
+                              subject,
+                              startTime: startTime.toISOString(),
+                              endTime: endTime.toISOString(),
+                              description: `Quick ${durationMinutes}-minute session`
+                            };
+                            
+                            // Create and start the session
+                            fetch(
+                              `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/study-sessions`,
+                              {
+                                method: 'POST',
+                                headers: {
+                                  'Content-Type': 'application/json',
+                                  Authorization: `Bearer ${localStorage.getItem("token")}`,
+                                },
+                                body: JSON.stringify(sessionData)
+                              }
+                            )
+                            .then(response => {
+                              if (!response.ok) throw new Error("Failed to create session");
+                              return response.json();
+                            })
+                            .then(data => {
+                              toast({
+                                title: "Session Created",
+                                description: "Your quick study session has been created"
+                              });
+                              
+                              // Navigate to the study session
+                              navigate(`/study-session?sessionId=${data._id}`);
+                            })
+                            .catch(error => {
+                              console.error("Error creating quick session:", error);
+                              toast({
+                                title: "Error",
+                                description: "Failed to create quick session",
+                                variant: "destructive"
+                              });
+                            });
+                          }}
+                        >
                           Start Immediate Session
                         </Button>
                       </div>
@@ -468,59 +522,47 @@ export default function StudyPlanPage() {
                     {/* Upcoming Sessions from Plan Tab */}
                     <div className="bg-muted/50 rounded-lg p-4">
                       <h3 className="text-lg font-medium mb-2">Upcoming Sessions from Plan</h3>
-                      <div className="space-y-2">
-                        {sessions.filter(session => {
-                          const sessionDate = new Date(session.startTime);
-                          const today = new Date();
-                          return sessionDate > today && sessionDate.toDateString() !== today.toDateString();
-                        }).slice(0, 3).map((session, index) => {
-                          const startTime = new Date(session.startTime);
-                          const sessionDate = startTime.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-                          const color = getSubjectColor(session.subject);
-                          
-                          return (
-                            <div key={session._id || index} className="bg-card rounded-lg p-3 border border-border hover:border-primary/50 transition-colors relative overflow-hidden">
-                              <div 
-                                className="absolute top-0 left-0 w-1 h-full" 
-                                style={{ backgroundColor: color }}
-                              ></div>
-                              <div className="pl-2">
+                      {sessions.filter(session => {
+                        const sessionDate = new Date(session.startTime);
+                        const today = new Date();
+                        return sessionDate > today && sessionDate.toDateString() !== today.toDateString();
+                      }).length > 0 ? (
+                        <div className="space-y-2">
+                          {sessions.filter(session => {
+                            const sessionDate = new Date(session.startTime);
+                            const today = new Date();
+                            return sessionDate > today && sessionDate.toDateString() !== today.toDateString();
+                          }).slice(0, 3).map((session, index) => {
+                            const startTime = new Date(session.startTime);
+                            const endTime = new Date(session.endTime);
+                            const duration = getDuration(startTime, endTime);
+                            return (
+                              <div key={session._id || index} className="bg-card rounded-lg p-4 border border-border">
                                 <h4 className="font-medium">{session.subject} {session.description ? `- ${session.description}` : ""}</h4>
-                                <div className="flex justify-between items-center mt-2">
-                                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                    <Calendar className="h-4 w-4" />
-                                    <span>{sessionDate}</span>
-                                  </div>
-                                  <div className="flex items-center gap-1 text-sm text-muted-foreground">
-                                    <Clock className="h-4 w-4" />
-                                    <span>{startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                                  </div>
-                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                  {startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} - 
+                                  {endTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})} ({duration})
+                                </p>
                               </div>
-                            </div>
-                          );
-                        })}
-                        {sessions.filter(session => {
-                          const sessionDate = new Date(session.startTime);
-                          const today = new Date();
-                          return sessionDate > today && sessionDate.toDateString() !== today.toDateString();
-                        }).length === 0 && (
-                          <p className="text-muted-foreground">No upcoming sessions scheduled.</p>
-                        )}
-                        {sessions.filter(session => {
-                          const sessionDate = new Date(session.startTime);
-                          const today = new Date();
-                          return sessionDate > today && sessionDate.toDateString() !== today.toDateString();
-                        }).length > 3 && (
-                          <Button 
-                            variant="outline" 
-                            className="w-full mt-2"
-                            onClick={() => setActiveTab("plan")}
-                          >
-                            View All in Plan
-                          </Button>
-                        )}
-                      </div>
+                            );
+                          })}
+                          {sessions.filter(session => {
+                            const sessionDate = new Date(session.startTime);
+                            const today = new Date();
+                            return sessionDate > today && sessionDate.toDateString() !== today.toDateString();
+                          }).length > 3 && (
+                            <Button 
+                              variant="outline" 
+                              className="w-full mt-2"
+                              onClick={() => setActiveTab("plan")}
+                            >
+                              View All in Plan
+                            </Button>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-muted-foreground">No upcoming sessions scheduled.</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -537,44 +579,48 @@ export default function StudyPlanPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {/* Simulating subjects with files - in a real app this would come from your API */}
                       {sessions.reduce((subjects, session) => {
                         if (!subjects.includes(session.subject)) {
                           subjects.push(session.subject);
                         }
                         return subjects;
-                      }, []).slice(0, 5).map((subject, index) => (
-                        <div 
-                          key={subject} 
-                          className="p-3 rounded-lg border border-border bg-card/50 hover:border-primary/30 hover:bg-card transition-colors cursor-pointer"
-                          onClick={() => navigate(`/notebook?subject=${encodeURIComponent(subject)}`)}
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center">
-                              <div 
-                                className="h-8 w-8 rounded-full mr-3 flex items-center justify-center text-white"
-                                style={{ backgroundColor: getSubjectColor(subject) }}
+                      }, []).slice(0, 5).map((subject, index) => {
+                        // Find the subject in the subjects context to get the actual file count
+                        const subjectInfo = subjects.find(s => s.name === subject);
+                        const fileCount = subjectInfo ? subjectInfo.documentsCount || 0 : 0;
+                        
+                        return (
+                          <div 
+                            key={subject} 
+                            className="p-3 rounded-lg border border-border bg-card/50 hover:border-primary/30 hover:bg-card transition-colors cursor-pointer"
+                            onClick={() => navigate(`/notebook?subject=${encodeURIComponent(subject)}`)}
+                          >
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center">
+                                <div 
+                                  className="h-8 w-8 rounded-full mr-3 flex items-center justify-center text-white"
+                                  style={{ backgroundColor: getSubjectColor(subject) }}
+                                >
+                                  {subject.charAt(0)}
+                                </div>
+                                <div>
+                                  <h3 className="font-medium">{subject}</h3>
+                                  <p className="text-xs text-muted-foreground">
+                                    {fileCount} {fileCount === 1 ? 'file' : 'files'}
+                                  </p>
+                                </div>
+                              </div>
+                              <Button 
+                                variant="ghost" 
+                                size="icon"
+                                className="h-8 w-8"
                               >
-                                {subject.charAt(0)}
-                              </div>
-                              <div>
-                                <h3 className="font-medium">{subject}</h3>
-                                <p className="text-xs text-muted-foreground">
-                                  {/* Simulating file counts - would come from API */}
-                                  {Math.floor(Math.random() * 5) + 1} files
-                                </p>
-                              </div>
+                                <Play className="h-4 w-4" />
+                              </Button>
                             </div>
-                            <Button 
-                              variant="ghost" 
-                              size="icon"
-                              className="h-8 w-8"
-                            >
-                              <Play className="h-4 w-4" />
-                            </Button>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     <Button variant="outline" className="w-full mt-4" onClick={() => navigate('/notebook')}>
                       View All Materials

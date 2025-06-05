@@ -1,122 +1,112 @@
 const multer = require('multer');
+const cloudinary = require('cloudinary').v2;
 const { CloudinaryStorage } = require('multer-storage-cloudinary');
-const cloudinary = require('../config/cloudinary');
+const path = require('path');
 
-// Log Cloudinary configuration
-console.log('[Upload] Cloudinary configuration:', {
-  cloudName: process.env.CLOUDINARY_CLOUD_NAME ? 'Present' : 'Missing',
-  apiKey: process.env.CLOUDINARY_API_KEY ? 'Present' : 'Missing',
-  apiSecret: process.env.CLOUDINARY_API_SECRET ? 'Present' : 'Missing'
-});
+// Configure Cloudinary storage
+const configureStorage = (folderName) => {
+  return new CloudinaryStorage({
+    cloudinary: cloudinary,
+    params: {
+      folder: `study-planner/${folderName}`,
+      resource_type: 'auto',
+      // For PDFs, ensure they're uploaded with proper flags for viewing
+      format: (req, file) => {
+        // Get file extension
+        const extension = path.extname(file.originalname).toLowerCase().substring(1);
+        console.log(`[Upload] File extension: ${extension} for file ${file.originalname}`);
+        return extension;
+      },
+      transformation: (req, file) => {
+        // For PDFs, don't apply any transformations
+        const extension = path.extname(file.originalname).toLowerCase();
+        if (extension === '.pdf') {
+          return [];
+        }
+        // For images, apply basic optimizations
+        return [{ width: 1200, crop: 'limit' }];
+      },
+      // Don't use the attachment flag for PDFs to ensure they can be viewed in browser
+      use_filename: true,
+      unique_filename: true,
+      overwrite: false,
+      // Set resource_type based on file type
+      type: (req, file) => {
+        const extension = path.extname(file.originalname).toLowerCase();
+        // For PDFs, ensure they're uploaded as 'raw' type
+        if (extension === '.pdf') {
+          return 'upload'; // Use standard upload type for PDFs
+        }
+        return 'auto';
+      },
+    },
+  });
+};
 
-const storage = new CloudinaryStorage({
-  cloudinary,
-  params: {
-    folder: 'studyverse_notes',
-    resource_type: 'auto',
-    allowed_formats: ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'mp4', 'webm', 'mp3', 'wav'],
-    type: 'upload',
-    transformation: []
-  }
-});
-
-// Create the basic multer middleware
-const multerUpload = multer({ 
-  storage,
-  limits: {
-    fileSize: 10 * 1024 * 1024, // 10MB limit
-    files: 1 // Only one file at a time
-  }
-});
-
-// Function to create a configured upload middleware
-// with proper error handling and logging
-const upload = (fieldName) => {
-  if (!fieldName) {
-    throw new Error('Field name is required for file upload');
-  }
+// Create upload middleware with specific folder
+const upload = (folderName) => {
+  const storage = configureStorage(folderName);
   
-  // Return middleware function
+  // Configure multer with file filtering
+  const uploadMiddleware = multer({
+    storage,
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      // Check file type
+      const filetypes = /pdf|doc|docx|ppt|pptx|xls|xlsx|txt|jpg|jpeg|png/;
+      const extname = filetypes.test(path.extname(file.originalname).toLowerCase());
+      const mimetype = filetypes.test(file.mimetype);
+      
+      console.log(`[Upload] File check: ${file.originalname}, mimetype: ${file.mimetype}, valid extension: ${extname}, valid mimetype: ${mimetype}`);
+      
+      if (extname && mimetype) {
+        // For PDFs, set special handling flag
+        if (path.extname(file.originalname).toLowerCase() === '.pdf') {
+          file.isPdf = true;
+          console.log('[Upload] PDF file detected, applying special handling');
+        }
+        return cb(null, true);
+      } else {
+        return cb(new Error('Only document and image files are allowed!'));
+      }
+    }
+  }).single('file');
+  
+  // Wrap the middleware to handle PDF-specific post-processing
   return (req, res, next) => {
-    console.log('[Upload] Starting file upload process:', {
-      fieldName,
-      contentType: req.headers['content-type'],
-      contentLength: req.headers['content-length']
-    });
-    
-    // Use multer's single file upload
-    multerUpload.single(fieldName)(req, res, (err) => {
+    uploadMiddleware(req, res, async (err) => {
       if (err) {
-        console.error('[Upload] File upload error:', {
-          message: err.message,
-          stack: err.stack,
-          field: fieldName,
-          code: err.code,
-          name: err.name,
-          http_code: err.http_code
-        });
-
-        // Handle specific multer errors
-        if (err.code === 'LIMIT_FILE_SIZE') {
-          return res.status(400).json({ 
-            error: 'File size too large. Maximum size is 10MB.' 
-          });
-        }
-        if (err.code === 'LIMIT_FILE_COUNT') {
-          return res.status(400).json({ 
-            error: 'Too many files. Only one file can be uploaded at a time.' 
-          });
-        }
-        if (err.code === 'LIMIT_UNEXPECTED_FILE') {
-          return res.status(400).json({ 
-            error: `Invalid field name. Expected '${fieldName}'` 
-          });
+        console.error('[Upload] Error in upload middleware:', err);
+        return res.status(400).json({ error: err.message });
+      }
+      
+      // If no file was uploaded, continue
+      if (!req.file) {
+        return next();
+      }
+      
+      try {
+        // For PDFs, ensure the URL doesn't have attachment flags
+        if (req.file.isPdf || 
+            path.extname(req.file.originalname).toLowerCase() === '.pdf' ||
+            req.file.mimetype === 'application/pdf') {
+          
+          console.log('[Upload] Post-processing PDF file');
+          
+          // If Cloudinary added fl_attachment flag, remove it
+          if (req.file.path && req.file.path.includes('fl_attachment')) {
+            req.file.path = req.file.path.replace('/upload/fl_attachment/', '/upload/');
+            console.log('[Upload] Removed attachment flag from URL:', req.file.path);
+          }
         }
         
-        // Handle Cloudinary-specific errors
-        if (err.message && err.message.includes('file format not allowed')) {
-          return res.status(400).json({
-            error: 'File format not supported by the storage provider. Please try a different file format.'
-          });
-        }
-
-        // Check for Cloudinary API errors
-        if (err.http_code === 400 || err.http_code === 401 || err.http_code === 403) {
-          return res.status(500).json({
-            error: 'Cloudinary configuration error. Please check your API credentials and settings.'
-          });
-        }
-
-        // Generic error fallback
-        return res.status(500).json({
-          error: 'File upload failed: ' + (err.message || 'Unknown error')
-        });
+        next();
+      } catch (error) {
+        console.error('[Upload] Error in post-processing:', error);
+        next();
       }
-      
-      // Log successful upload if file exists
-      if (req.file) {
-        console.log('[Upload] File successfully uploaded to Cloudinary:', {
-          originalname: req.file.originalname,
-          mimetype: req.file.mimetype,
-          size: req.file.size,
-          path: req.file.path,
-          publicId: req.file.filename,
-          url: req.file.path, // This is the Cloudinary URL
-          secureUrl: req.file.path.replace('http://', 'https://') // Ensure HTTPS
-        });
-
-        // Verify the Cloudinary URL is accessible
-        if (!req.file.path) {
-          console.error('[Upload] Cloudinary URL is missing from upload response');
-          return res.status(500).json({ 
-            error: 'Failed to get file URL from Cloudinary' 
-          });
-        }
-      } else {
-        console.log('[Upload] No file was uploaded with field:', fieldName);
-      }
-      
-      next();
     });
   };
 };

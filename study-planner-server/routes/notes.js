@@ -10,7 +10,398 @@ const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
 
-// Apply authentication middleware to all routes
+// Define the view-pdf endpoint BEFORE applying auth middleware
+// This allows direct access with token in query parameter
+router.get('/view-pdf/:id', async (req, res) => {
+  try {
+    console.log('[Notes] View PDF request for document ID:', req.params.id);
+    console.log('[Notes] Query parameters:', req.query);
+    console.log('[Notes] Authorization header:', req.headers.authorization ? 'Present' : 'Missing');
+    
+    // Validate ID format
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid document ID format' });
+    }
+    
+    // Get user from token in query parameter
+    let userId;
+    
+    // Check if token is provided in query parameter
+    if (req.query.token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        console.log('[Notes] Token from query parameter:', req.query.token.substring(0, 20) + '...');
+        const decoded = jwt.verify(req.query.token, process.env.JWT_SECRET);
+        console.log('[Notes] Decoded token:', decoded);
+        
+        // Use 'id' property from token
+        userId = decoded.id;
+        console.log('[Notes] Authenticated via token query parameter, userId:', userId);
+      } catch (tokenError) {
+        console.error('[Notes] Invalid token in query parameter:', tokenError);
+        return res.status(401).json({ error: 'Invalid authentication token' });
+      }
+    } else {
+      console.log('[Notes] No authentication token found in query parameters');
+      return res.status(401).json({ error: 'Authentication token required' });
+    }
+    
+    console.log('[Notes] Looking for document with ID:', req.params.id, 'and userId:', userId);
+    
+    // Find the document
+    const note = await Note.findOne({ _id: req.params.id, userId: userId });
+    
+    if (!note) {
+      console.log('[Notes] Document not found for viewing:', req.params.id);
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    console.log('[Notes] Found document for viewing:', {
+      id: note._id,
+      title: note.title,
+      publicId: note.publicId || 'Missing',
+      fileUrl: note.fileUrl || 'Missing'
+    });
+    
+    if (!note.publicId) {
+      return res.status(400).json({ error: 'Document has no associated file' });
+    }
+    
+    // Clean the publicId - Cloudinary typically doesn't include file extensions in the publicId
+    let cleanPublicId = note.publicId;
+    
+    // Remove file extension if present in the publicId
+    if (cleanPublicId.includes('.')) {
+      cleanPublicId = cleanPublicId.substring(0, cleanPublicId.lastIndexOf('.'));
+    }
+    
+    // Remove any fl_attachment flags from the URL if present
+    let cloudinaryUrl = note.fileUrl;
+    if (cloudinaryUrl && cloudinaryUrl.includes('fl_attachment')) {
+      cloudinaryUrl = cloudinaryUrl.replace('/upload/fl_attachment/', '/upload/');
+      console.log('[Notes] Removed fl_attachment flag from URL');
+    }
+    
+    // Determine format - default to pdf
+    let format = note.fileUrl ? note.fileUrl.split('.').pop().toLowerCase() : 'pdf';
+    
+    try {
+      // First try to use a local copy if available
+      const uploadsDir = path.join(process.cwd(), 'uploads');
+      const filename = `${cleanPublicId.replace(/\//g, '-')}.${format}`;
+      const localFilePath = path.join(uploadsDir, filename);
+      
+      if (fs.existsSync(localFilePath)) {
+        console.log(`[Notes] Serving PDF from local storage: ${localFilePath}`);
+        
+        // CRITICAL: Set proper headers for PDF viewing in browser
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'inline; filename="' + encodeURIComponent(note.title || 'document.pdf') + '"');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range, Authorization');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        
+        // Send file directly instead of streaming
+        return res.sendFile(localFilePath);
+      }
+      
+      // If no local copy, get the PDF directly from Cloudinary
+      console.log('[Notes] No local copy, fetching from Cloudinary');
+      
+      // Generate a direct raw URL
+      const cloudName = cloudinary.config().cloud_name;
+      
+      // Be explicit about using raw resource type for proper document delivery
+      const viewUrl = ensureInlineViewing(`https://res.cloudinary.com/${cloudName}/raw/upload/${cleanPublicId}.${format}`);
+      console.log(`[Notes] Using direct Cloudinary URL: ${viewUrl}`);
+      
+      // Download the file to local storage for future use
+      try {
+        // Create uploads directory if it doesn't exist
+        if (!fs.existsSync(uploadsDir)) {
+          fs.mkdirSync(uploadsDir, { recursive: true });
+        }
+        
+        // Use axios to download the file
+        const response = await axios({
+          method: 'GET',
+          url: viewUrl,
+          responseType: 'arraybuffer',
+          timeout: 30000,
+          headers: {
+            'Accept': '*/*',
+            'User-Agent': 'Study-Planner-Server'
+          }
+        });
+        
+        // Save to local file
+        fs.writeFileSync(localFilePath, response.data);
+        console.log(`[Notes] Downloaded PDF to local storage: ${localFilePath}`);
+        
+        // Set critical headers
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', 'inline; filename="' + encodeURIComponent(note.title || 'document.pdf') + '"');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range, Authorization');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        
+        return res.sendFile(localFilePath);
+      } catch (downloadError) {
+        console.error('[Notes] Error downloading from Cloudinary:', downloadError);
+        
+        // If download fails, use a direct response with the raw PDF data
+        console.log('[Notes] Trying direct streaming from Cloudinary');
+        
+        // Resend the request but pipe the response directly
+        try {
+          const pdfResponse = await axios({
+            method: 'GET',
+            url: viewUrl,
+            responseType: 'stream',
+            timeout: 30000
+          });
+          
+          // Apply critical headers
+          res.setHeader('Content-Type', 'application/pdf');
+          res.setHeader('Content-Disposition', 'inline; filename="' + encodeURIComponent(note.title || 'document.pdf') + '"');
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range, Authorization');
+          res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges, Content-Length');
+          res.setHeader('Cache-Control', 'no-cache');
+          res.setHeader('X-Content-Type-Options', 'nosniff');
+          
+          // Stream the response
+          return pdfResponse.data.pipe(res);
+        } catch (streamError) {
+          console.error('[Notes] Error streaming from Cloudinary:', streamError);
+          throw streamError;
+        }
+      }
+    } catch (err) {
+      console.error('[Notes] All PDF serving methods failed:', err);
+      
+      // Last resort - return a JSON error with direct download link
+      const cloudName = cloudinary.config().cloud_name;
+      const directUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${cleanPublicId}.${format}`;
+      
+      res.status(500).json({ 
+        error: 'Failed to serve PDF document',
+        message: err.message,
+        downloadUrl: directUrl,
+        note: {
+          id: note._id,
+          title: note.title
+        }
+      });
+    }
+  } catch (err) {
+    console.error('[Notes] View PDF error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Also define the download endpoint BEFORE applying auth middleware
+// This allows direct access with token in query parameter
+router.get('/download/:id', async (req, res) => {
+  try {
+    console.log('[Notes] Download request for document ID:', req.params.id);
+    
+    // Check if this is a download or view request
+    const isDownload = req.query.download === 'true';
+    console.log(`[Notes] Request type: ${isDownload ? 'Download' : 'View'}`);
+    
+    // Validate ID format
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ error: 'Invalid document ID format' });
+    }
+    
+    // Get user from token - either from auth middleware or from query parameter
+    let userId;
+    
+    // Check if token is provided in query parameter
+    if (req.query.token) {
+      try {
+        const jwt = require('jsonwebtoken');
+        const decoded = jwt.verify(req.query.token, process.env.JWT_SECRET);
+        userId = decoded.id;
+        console.log('[Notes] Authenticated via token query parameter:', userId);
+      } catch (tokenError) {
+        console.error('[Notes] Invalid token in query parameter:', tokenError);
+        return res.status(401).json({ error: 'Invalid authentication token' });
+      }
+    } else {
+      console.log('[Notes] No authentication token found in query parameters');
+      return res.status(401).json({ error: 'Authentication token required' });
+    }
+    
+    // Find the document
+    const note = await Note.findOne({ _id: req.params.id, userId: userId });
+    
+    if (!note) {
+      console.log('[Notes] Document not found for download:', req.params.id);
+      return res.status(404).json({ error: 'Document not found' });
+    }
+    
+    console.log('[Notes] Found document for download:', {
+      id: note._id,
+      title: note.title,
+      publicId: note.publicId || 'Missing'
+    });
+    
+    if (!note.publicId) {
+      return res.status(400).json({ error: 'Document has no associated file' });
+    }
+    
+    // Determine resource type based on file extension
+    let resourceType = 'raw'; // Default for PDFs and other documents
+    let format = note.fileUrl ? note.fileUrl.split('.').pop().toLowerCase() : 'pdf';
+    
+    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff'].includes(format)) {
+      resourceType = 'image';
+    } else if (['mp4', 'webm', 'mov', 'ogv'].includes(format)) {
+      resourceType = 'video';
+    }
+    
+    // Set the appropriate Content-Type based on format
+    const contentTypes = {
+      pdf: 'application/pdf',
+      doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xls: 'application/vnd.ms-excel',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      ppt: 'application/vnd.ms-powerpoint',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      txt: 'text/plain',
+      csv: 'text/csv',
+    };
+    
+    // Default content type for PDF or use a format-specific one
+    const contentType = contentTypes[format] || 'application/pdf';
+    
+    // Clean the publicId
+    let cleanPublicId = note.publicId;
+    if (cleanPublicId.includes('.')) {
+      cleanPublicId = cleanPublicId.substring(0, cleanPublicId.lastIndexOf('.'));
+    }
+    
+    console.log(`[Notes] Downloading file with publicId: ${cleanPublicId}, resource type: ${resourceType}`);
+    
+    try {
+      // First try to get file from local storage if it exists
+      const uploadsDir = path.join(process.cwd(), 'uploads');
+      const filename = `${cleanPublicId.replace(/\//g, '-')}.${format}`;
+      const localFilePath = path.join(uploadsDir, filename);
+      
+      if (fs.existsSync(localFilePath)) {
+        console.log(`[Notes] Serving file from local storage: ${localFilePath}`);
+        
+        // Set appropriate headers
+        res.setHeader('Content-Type', contentType);
+        
+        // Set disposition based on request type
+        if (isDownload) {
+          res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(note.title || 'document')}.${format}"`);
+        } else {
+          res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(note.title || 'document')}.${format}"`);
+        }
+        
+        // Add CORS and caching headers
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cache-Control', 'public, max-age=3600');
+        
+        // Stream the file
+        return fs.createReadStream(localFilePath).pipe(res);
+      }
+      
+      // If file doesn't exist locally, download from Cloudinary first
+      console.log(`[Notes] File not found locally, downloading from Cloudinary`);
+      
+      try {
+        const localUrl = await downloadFromCloudinary(cleanPublicId, `${note.title || 'document'}.${format}`, resourceType);
+      
+        // After download, serve the file
+        const newLocalPath = path.join(process.cwd(), localUrl.substring(1)); // Remove leading slash
+        
+        if (fs.existsSync(newLocalPath)) {
+          console.log(`[Notes] Serving downloaded file: ${newLocalPath}`);
+          
+          // Set appropriate headers
+          res.setHeader('Content-Type', contentType);
+          
+          // Set disposition based on request type
+          if (isDownload) {
+            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(note.title || 'document')}.${format}"`);
+          } else {
+            res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(note.title || 'document')}.${format}"`);
+          }
+          
+          // Add CORS and caching headers
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Cache-Control', 'public, max-age=3600');
+          
+          // Stream the file
+          return fs.createReadStream(newLocalPath).pipe(res);
+        }
+      } catch (downloadErr) {
+        console.error(`[Notes] Error downloading file locally:`, downloadErr);
+      }
+      
+      console.error(`[Notes] Failed to serve file locally, falling back to Cloudinary`);
+      
+      // As a last resort, try to get from Cloudinary but proxy the response
+      // to ensure proper headers
+      const cloudName = cloudinary.config().cloud_name;
+      // Use raw URL without any problematic flags
+      const cloudinaryUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${cleanPublicId}.${format}`;
+      
+      try {
+        console.log(`[Notes] Fetching and proxying from Cloudinary URL: ${cloudinaryUrl}`);
+        const response = await axios({
+          method: 'GET',
+          url: cloudinaryUrl,
+          responseType: 'arraybuffer'
+        });
+        
+        // Set proper headers for browser viewing
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Content-Disposition', isDownload ? 
+          `attachment; filename="${encodeURIComponent(note.title || 'document')}.${format}"` :
+          `inline; filename="${encodeURIComponent(note.title || 'document')}.${format}"`);
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        
+        // Return the response data
+        return res.send(response.data);
+      } catch (proxyError) {
+        console.error(`[Notes] Error proxying from Cloudinary:`, proxyError);
+        
+        // As a last resort, redirect to Cloudinary URL directly
+        console.log(`[Notes] Last resort: redirecting to Cloudinary URL: ${cloudinaryUrl}`);
+      return res.redirect(cloudinaryUrl);
+      }
+    } catch (err) {
+      console.error('[Notes] Error serving file from local storage:', err);
+      
+      // As a last resort, try to redirect to Cloudinary URL directly
+      const cloudName = cloudinary.config().cloud_name;
+      const cloudinaryUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${cleanPublicId}.${format}`;
+      
+      console.log(`[Notes] Redirecting to Cloudinary URL: ${cloudinaryUrl}`);
+      return res.redirect(cloudinaryUrl);
+    }
+  } catch (err) {
+    console.error('[Notes] Download error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Apply authentication middleware to all other routes
 router.use(auth);
 
 // Upload Note
@@ -758,180 +1149,6 @@ router.get('/check-cloudinary', auth, async (req, res) => {
   }
 });
 
-// Download note file directly
-router.get('/download/:id', auth, async (req, res) => {
-  try {
-    console.log('[Notes] Download request for document ID:', req.params.id);
-    
-    // Check if this is a download or view request
-    const isDownload = req.query.download === 'true';
-    console.log(`[Notes] Request type: ${isDownload ? 'Download' : 'View'}`);
-    
-    // Validate ID format
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ error: 'Invalid document ID format' });
-    }
-    
-    // Find the document
-    const note = await Note.findOne({ _id: req.params.id, userId: req.user._id });
-    
-    if (!note) {
-      console.log('[Notes] Document not found for download:', req.params.id);
-      return res.status(404).json({ error: 'Document not found' });
-    }
-    
-    console.log('[Notes] Found document for download:', {
-      id: note._id,
-      title: note.title,
-      publicId: note.publicId || 'Missing'
-    });
-    
-    if (!note.publicId) {
-      return res.status(400).json({ error: 'Document has no associated file' });
-    }
-    
-    // Determine resource type based on file extension
-    let resourceType = 'raw'; // Default for PDFs and other documents
-    let format = note.fileUrl ? note.fileUrl.split('.').pop().toLowerCase() : 'pdf';
-    
-    if (['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'tiff'].includes(format)) {
-      resourceType = 'image';
-    } else if (['mp4', 'webm', 'mov', 'ogv'].includes(format)) {
-      resourceType = 'video';
-    }
-    
-    // Set the appropriate Content-Type based on format
-    const contentTypes = {
-      pdf: 'application/pdf',
-      doc: 'application/msword',
-      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      xls: 'application/vnd.ms-excel',
-      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-      ppt: 'application/vnd.ms-powerpoint',
-      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
-      txt: 'text/plain',
-      csv: 'text/csv',
-    };
-    
-    // Default content type for PDF or use a format-specific one
-    const contentType = contentTypes[format] || 'application/pdf';
-    
-    // Clean the publicId
-    let cleanPublicId = note.publicId;
-    if (cleanPublicId.includes('.')) {
-      cleanPublicId = cleanPublicId.substring(0, cleanPublicId.lastIndexOf('.'));
-    }
-    
-    console.log(`[Notes] Downloading file with publicId: ${cleanPublicId}, resource type: ${resourceType}`);
-    
-    try {
-      // First try to get file from local storage if it exists
-      const uploadsDir = path.join(process.cwd(), 'uploads');
-      const filename = `${cleanPublicId.replace(/\//g, '-')}.${format}`;
-      const localFilePath = path.join(uploadsDir, filename);
-      
-      if (fs.existsSync(localFilePath)) {
-        console.log(`[Notes] Serving file from local storage: ${localFilePath}`);
-        
-        // Set appropriate headers
-        res.setHeader('Content-Type', contentType);
-        
-        // Set disposition based on request type
-        if (isDownload) {
-          res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(note.title || 'document')}.${format}"`);
-        } else {
-          res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(note.title || 'document')}.${format}"`);
-        }
-        
-        // Add CORS and caching headers
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Cache-Control', 'public, max-age=3600');
-        
-        // Stream the file
-        return fs.createReadStream(localFilePath).pipe(res);
-      }
-      
-      // If file doesn't exist locally, download from Cloudinary first
-      console.log(`[Notes] File not found locally, downloading from Cloudinary`);
-      
-      try {
-        const localUrl = await downloadFromCloudinary(cleanPublicId, `${note.title || 'document'}.${format}`, resourceType);
-      
-        // After download, serve the file
-        const newLocalPath = path.join(process.cwd(), localUrl.substring(1)); // Remove leading slash
-        
-        if (fs.existsSync(newLocalPath)) {
-          console.log(`[Notes] Serving downloaded file: ${newLocalPath}`);
-          
-          // Set appropriate headers
-          res.setHeader('Content-Type', contentType);
-          
-          // Set disposition based on request type
-          if (isDownload) {
-            res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(note.title || 'document')}.${format}"`);
-          } else {
-            res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(note.title || 'document')}.${format}"`);
-          }
-          
-          // Add CORS and caching headers
-          res.setHeader('Access-Control-Allow-Origin', '*');
-          res.setHeader('Cache-Control', 'public, max-age=3600');
-          
-          // Stream the file
-          return fs.createReadStream(newLocalPath).pipe(res);
-        }
-      } catch (downloadErr) {
-        console.error(`[Notes] Error downloading file locally:`, downloadErr);
-      }
-      
-      console.error(`[Notes] Failed to serve file locally, falling back to Cloudinary`);
-      
-      // As a last resort, try to get from Cloudinary but proxy the response
-      // to ensure proper headers
-      const cloudName = cloudinary.config().cloud_name;
-      // Use raw URL without any problematic flags
-      const cloudinaryUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${cleanPublicId}.${format}`;
-      
-      try {
-        console.log(`[Notes] Fetching and proxying from Cloudinary URL: ${cloudinaryUrl}`);
-        const response = await axios({
-          method: 'GET',
-          url: cloudinaryUrl,
-          responseType: 'arraybuffer'
-        });
-        
-        // Set proper headers for browser viewing
-        res.setHeader('Content-Type', contentType);
-        res.setHeader('Content-Disposition', isDownload ? 
-          `attachment; filename="${encodeURIComponent(note.title || 'document')}.${format}"` :
-          `inline; filename="${encodeURIComponent(note.title || 'document')}.${format}"`);
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        
-        // Return the response data
-        return res.send(response.data);
-      } catch (proxyError) {
-        console.error(`[Notes] Error proxying from Cloudinary:`, proxyError);
-        
-        // As a last resort, redirect to Cloudinary URL directly
-        console.log(`[Notes] Last resort: redirecting to Cloudinary URL: ${cloudinaryUrl}`);
-      return res.redirect(cloudinaryUrl);
-      }
-    } catch (err) {
-      console.error('[Notes] Error serving file from local storage:', err);
-      
-      // As a last resort, try to redirect to Cloudinary URL directly
-      const cloudName = cloudinary.config().cloud_name;
-      const cloudinaryUrl = `https://res.cloudinary.com/${cloudName}/raw/upload/${cleanPublicId}.${format}`;
-      
-      console.log(`[Notes] Redirecting to Cloudinary URL: ${cloudinaryUrl}`);
-      return res.redirect(cloudinaryUrl);
-    }
-  } catch (err) {
-    console.error('[Notes] Download error:', err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // Clear all notes for a user
 router.delete('/clear-all', auth, async (req, res) => {
   console.log('[Notes] Clearing all notes for user:', req.user._id);
@@ -1089,168 +1306,6 @@ router.get('/by-subject/:subject', auth, async (req, res) => {
       error: err.message,
       data: [] 
     });
-  }
-});
-
-// View PDF in browser endpoint
-router.get('/view-pdf/:id', auth, async (req, res) => {
-  try {
-    console.log('[Notes] View PDF request for document ID:', req.params.id);
-    
-    // Validate ID format
-    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
-      return res.status(400).json({ error: 'Invalid document ID format' });
-    }
-    
-    // Find the document
-    const note = await Note.findOne({ _id: req.params.id, userId: req.user._id });
-    
-    if (!note) {
-      console.log('[Notes] Document not found for viewing:', req.params.id);
-      return res.status(404).json({ error: 'Document not found' });
-    }
-    
-    console.log('[Notes] Found document for viewing:', {
-      id: note._id,
-      title: note.title,
-      publicId: note.publicId || 'Missing',
-      fileUrl: note.fileUrl || 'Missing'
-    });
-    
-    if (!note.publicId) {
-      return res.status(400).json({ error: 'Document has no associated file' });
-    }
-    
-    // Clean the publicId - Cloudinary typically doesn't include file extensions in the publicId
-    let cleanPublicId = note.publicId;
-    
-    // Remove file extension if present in the publicId
-    if (cleanPublicId.includes('.')) {
-      cleanPublicId = cleanPublicId.substring(0, cleanPublicId.lastIndexOf('.'));
-    }
-    
-    // Remove any fl_attachment flags from the URL if present
-    let cloudinaryUrl = note.fileUrl;
-    if (cloudinaryUrl && cloudinaryUrl.includes('fl_attachment')) {
-      cloudinaryUrl = cloudinaryUrl.replace('/upload/fl_attachment/', '/upload/');
-      console.log('[Notes] Removed fl_attachment flag from URL');
-    }
-    
-    // Determine format - default to pdf
-    let format = note.fileUrl ? note.fileUrl.split('.').pop().toLowerCase() : 'pdf';
-    
-    try {
-      // First try to use a local copy if available
-      const uploadsDir = path.join(process.cwd(), 'uploads');
-      const filename = `${cleanPublicId.replace(/\//g, '-')}.${format}`;
-      const localFilePath = path.join(uploadsDir, filename);
-      
-      if (fs.existsSync(localFilePath)) {
-        console.log(`[Notes] Serving PDF from local storage: ${localFilePath}`);
-        
-        // CRITICAL: Set proper headers for PDF viewing in browser
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'inline; filename="' + encodeURIComponent(note.title || 'document.pdf') + '"');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
-        res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('X-Content-Type-Options', 'nosniff');
-        
-        // Send file directly instead of streaming
-        return res.sendFile(localFilePath);
-      }
-      
-      // If no local copy, get the PDF directly from Cloudinary
-      console.log('[Notes] No local copy, fetching from Cloudinary');
-      
-      // Generate a direct raw URL
-      const cloudName = cloudinary.config().cloud_name;
-      
-      // Be explicit about using raw resource type for proper document delivery
-      const viewUrl = ensureInlineViewing(`https://res.cloudinary.com/${cloudName}/raw/upload/${cleanPublicId}.${format}`);
-      console.log(`[Notes] Using direct Cloudinary URL: ${viewUrl}`);
-      
-      // Download the file to local storage for future use
-      try {
-        // Create uploads directory if it doesn't exist
-        if (!fs.existsSync(uploadsDir)) {
-          fs.mkdirSync(uploadsDir, { recursive: true });
-        }
-        
-        // Use axios to download the file
-      const response = await axios({
-        method: 'GET',
-        url: viewUrl,
-          responseType: 'arraybuffer',
-          timeout: 30000
-      });
-      
-        // Save to local file
-        fs.writeFileSync(localFilePath, response.data);
-        console.log(`[Notes] Downloaded PDF to local storage: ${localFilePath}`);
-        
-        // Set critical headers
-      res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'inline; filename="' + encodeURIComponent(note.title || 'document.pdf') + '"');
-      res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
-        res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges');
-        res.setHeader('Cache-Control', 'no-cache');
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      
-        return res.sendFile(localFilePath);
-      } catch (downloadError) {
-        console.error('[Notes] Error downloading from Cloudinary:', downloadError);
-      
-        // If download fails, use a direct response with the raw PDF data
-        console.log('[Notes] Trying direct streaming from Cloudinary');
-        
-        // Resend the request but pipe the response directly
-        try {
-          const pdfResponse = await axios({
-            method: 'GET',
-            url: viewUrl,
-            responseType: 'stream',
-            timeout: 30000
-          });
-          
-          // Apply critical headers
-          res.setHeader('Content-Type', 'application/pdf');
-          res.setHeader('Content-Disposition', 'inline; filename="' + encodeURIComponent(note.title || 'document.pdf') + '"');
-          res.setHeader('Access-Control-Allow-Origin', '*');
-          res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Range');
-          res.setHeader('Access-Control-Expose-Headers', 'Content-Range, Accept-Ranges');
-          res.setHeader('Cache-Control', 'no-cache');
-          res.setHeader('X-Content-Type-Options', 'nosniff');
-          
-          // Stream the response
-          return pdfResponse.data.pipe(res);
-        } catch (streamError) {
-          console.error('[Notes] Error streaming from Cloudinary:', streamError);
-          throw streamError;
-        }
-      }
-    } catch (err) {
-      console.error('[Notes] All PDF serving methods failed:', err);
-      
-      // Last resort - return a JSON error
-      res.status(500).json({ 
-        error: 'Failed to serve PDF document',
-        message: err.message,
-        note: {
-          id: note._id,
-          title: note.title,
-          cloudinaryUrl: ensureInlineViewing(`https://res.cloudinary.com/${cloudinary.config().cloud_name}/raw/upload/${cleanPublicId}.${format}`)
-        }
-      });
-    }
-  } catch (err) {
-    console.error('[Notes] View PDF error:', err);
-    res.status(500).json({ error: err.message });
   }
 });
 

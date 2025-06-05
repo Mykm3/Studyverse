@@ -41,10 +41,12 @@ export default function StudyDashboard() {
               View Calendar
             </Button>
           </Link>
-          <Button variant="gradient" size="sm" className="shadow-md">
-            <Plus className="mr-2 h-4 w-4" />
-            New Study Session
-          </Button>
+          <Link to="/add-session">
+            <Button variant="gradient" size="sm" className="shadow-md">
+              <Plus className="mr-2 h-4 w-4" />
+              New Study Session
+            </Button>
+          </Link>
         </div>
       </div>
 
@@ -66,6 +68,7 @@ export default function StudyDashboard() {
         </Link>
       </div>
 
+      {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[
           {
@@ -128,6 +131,7 @@ export default function StudyDashboard() {
         ))}
       </div>
 
+      {/* Main Content: Upcoming Sessions and Recent Notes */}
       <div 
         className={`grid grid-cols-1 lg:grid-cols-2 gap-6 transition-all duration-500 ${
           isLoading ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'
