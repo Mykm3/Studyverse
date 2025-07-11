@@ -477,6 +477,7 @@ router.post('/upload', uploadMiddleware, async (req, res) => {
     res.status(201).json({
       success: true,
       fileUrl, // <-- add this line for frontend compatibility
+      _id: note._id, // for test upload MongoDB save check
       file: {
         id: result.public_id,
         url: fileUrl,
