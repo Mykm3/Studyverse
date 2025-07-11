@@ -9,6 +9,7 @@ const { downloadFromCloudinary, ensureInlineViewing } = require('../config/downl
 const path = require('path');
 const fs = require('fs');
 const axios = require('axios');
+const { upload: uploadMiddleware, uploadToCloudinary, validateFile } = require('../middleware/upload');
 
 // Define the view-pdf endpoint BEFORE applying auth middleware
 // This allows direct access with token in query parameter
@@ -405,91 +406,110 @@ router.get('/download/:id', async (req, res) => {
 router.use(auth);
 
 // Upload Note
-router.post('/upload', upload('note'), async (req, res) => {
-  console.log('[Notes] Received file upload request:', {
-    subject: req.body.subject,
-    title: req.body.title,
-    fileInfo: req.file ? {
-      originalname: req.file.originalname,
-      mimetype: req.file.mimetype,
-      size: req.file.size,
-      path: req.file.path,
-      publicId: req.file.filename
-    } : null,
-    userId: req.user._id
-  });
-
+router.post('/upload', uploadMiddleware, async (req, res) => {
   try {
-    // Validate required fields
     if (!req.file) {
-      return res.status(400).json({ error: 'No file uploaded' });
+      return res.status(400).json({
+        success: false,
+        error: 'NO_FILE',
+        message: 'No file uploaded'
+      });
     }
-    
+
     if (!req.body.subject) {
-      return res.status(400).json({ error: 'Subject is required' });
+      return res.status(400).json({
+        success: false,
+        error: 'NO_SUBJECT',
+        message: 'Subject is required'
+      });
     }
 
-    // Validate Cloudinary URL
-    if (!req.file.path || !req.file.filename) {
-      console.error('[Notes] Invalid Cloudinary response:', req.file);
-      return res.status(500).json({ error: 'Invalid file upload response' });
+    // Validate file type and size (redundant, but ensures safety)
+    try {
+      validateFile(req.file);
+    } catch (error) {
+      if (error.message === 'INVALID_FILE_TYPE') {
+        return res.status(400).json({
+          success: false,
+          error: 'INVALID_FILE_TYPE',
+          message: 'Only PDF files are allowed'
+        });
+      }
+      if (error.message === 'FILE_TOO_LARGE') {
+        return res.status(400).json({
+          success: false,
+          error: 'FILE_TOO_LARGE',
+          message: 'File size exceeds 10MB limit'
+        });
+      }
+      return res.status(500).json({
+        success: false,
+        error: 'UPLOAD_FAILED',
+        message: 'File upload failed'
+      });
     }
 
-    // Ensure HTTPS URL
-    const fileUrl = req.file.path.replace('http://', 'https://');
-    console.log('[Notes] Cloudinary URL:', fileUrl);
-    
-    // Use provided title or original filename if title is not provided
-    const title = req.body.title || req.file.originalname;
-    
-    console.log('[Notes] Creating note in database...');
+    const timestamp = Date.now();
+    const publicId = `note_${timestamp}`;
+    let result;
+    try {
+      result = await uploadToCloudinary(req.file.buffer, { public_id: publicId });
+    } catch (error) {
+      console.error('Upload error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'UPLOAD_FAILED',
+        message: 'File upload failed'
+      });
+    }
+
+    // Save note to DB
+    const title = req.body.title || result.original_filename;
+    const fileUrl = result.secure_url.replace('http://', 'https://');
     const note = await Note.create({
       subject: req.body.subject,
       title: title,
       fileUrl,
-      publicId: req.file.filename,
+      publicId: result.public_id,
       userId: req.user._id,
     });
-    
-    console.log('[Notes] Note created successfully:', {
-      noteId: note._id,
-      subject: note.subject,
-      title: note.title,
-      fileUrl: note.fileUrl,
-      publicId: note.publicId
-    });
-    
-    // Verify the file is accessible
-    try {
-      const result = await cloudinary.api.resource(note.publicId);
-      console.log('[Notes] Verified Cloudinary resource:', {
-        publicId: result.public_id,
-        format: result.format,
-        url: result.secure_url
-      });
-    } catch (error) {
-      console.error('[Notes] Failed to verify Cloudinary resource:', error);
-      // Don't fail the request, but log the error
-    }
-    
-    // Send the response with the proper URL
+
     res.status(201).json({
-      _id: note._id,
-      subject: note.subject,
-      title: note.title,
-      fileUrl: note.fileUrl, // This should be the HTTPS URL
-      publicId: note.publicId,
-      createdAt: note.createdAt,
-      updatedAt: note.updatedAt
+      success: true,
+      fileUrl, // <-- add this line for frontend compatibility
+      file: {
+        id: result.public_id,
+        url: fileUrl,
+        filename: result.original_filename,
+        size: result.bytes,
+        format: result.format,
+        uploadedAt: new Date().toISOString(),
+        noteId: note._id,
+        subject: note.subject,
+        title: note.title
+      }
     });
-  } catch (err) {
-    console.error('[Notes] Upload error:', {
-      message: err.message,
-      stack: err.stack,
-      body: req.body,
-      file: req.file
+  } catch (error) {
+    console.error('Upload error:', error);
+    if (error.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        success: false,
+        error: 'FILE_TOO_LARGE',
+        message: 'File size exceeds 10MB limit'
+      });
+    }
+    if (error.message === 'INVALID_FILE_TYPE') {
+      return res.status(400).json({
+        success: false,
+        error: 'INVALID_FILE_TYPE',
+        message: 'Only PDF files are allowed'
+      });
+    }
+    res.status(500).json({
+      success: false,
+      error: 'UPLOAD_FAILED',
+      message: 'File upload failed'
     });
-    res.status(500).json({ error: err.message });
   }
 });
 

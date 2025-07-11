@@ -153,15 +153,16 @@ export default function UpcomingStudySessions({ animate = false }) {
           </div>
         ) : (
           <div className="space-y-4">
-            {displaySessions.map((session) => {
+            {displaySessions.map((session, index) => {
               const duration = calculateDuration(session.startTime, session.endTime);
               const subject = session.subject || session.title;
               const date = formatDate(session.startTime);
               const timeRange = formatTimeRange(session.startTime, session.endTime);
-              
+              // Use session.id if available, otherwise fallback to index (for demo data)
+              const key = session.id || session._id || index;
               return (
                 <Link 
-                  key={session.id}
+                  key={key}
                   to={`/study-plan?session=${session.id}`}
                   className="block border rounded-lg p-4 hover:border-primary/50 transition-colors"
                 >
