@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import { ChevronLeft, ChevronRight, Download, HelpCircle } from 'lucide-react';
 import { Button } from './ui/Button';
+import 'react-pdf/dist/Page/AnnotationLayer.css';
+import 'react-pdf/dist/Page/TextLayer.css';
 
 // Use the local worker file from public directory (.mjs extension for newer versions)
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
