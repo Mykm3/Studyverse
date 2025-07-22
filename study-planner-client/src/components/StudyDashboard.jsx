@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Progress } from "@/components/ui/Progress"
 import { Calendar, Clock, BookOpen, TrendingUp, Plus, Award, Sparkles } from "lucide-react"
-import UpcomingStudySessions from "@/components/StudySuggestions"
+import NotificationDashboard from "@/components/NotificationDashboard"
 import RecentNotes from "@/components/RecentNotes"
 import { Link } from "react-router-dom"
 import { useAuth } from "@/contexts/AuthContext"
@@ -13,6 +13,7 @@ export default function StudyDashboard() {
   const firstName = user?.displayName?.split(" ")[0] || "there"
   const [isLoading, setIsLoading] = useState(true)
   const [animate, setAnimate] = useState(false)
+  const [sessions, setSessions] = useState([])
 
   useEffect(() => {
     // Simulate data loading
@@ -23,6 +24,30 @@ export default function StudyDashboard() {
     
     return () => clearTimeout(timer)
   }, [])
+
+  useEffect(() => {
+    // Fetch sessions for dashboard
+    const fetchSessions = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        const response = await fetch(`${apiUrl}/api/study-sessions`, {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
+        });
+        if (!response.ok) return;
+        const data = await response.json();
+        setSessions(data);
+      } catch (err) {
+        // Optionally handle error
+      }
+    };
+    fetchSessions();
+  }, []);
 
   return (
     <div className="p-6 space-y-6 page-transition">
@@ -138,7 +163,13 @@ export default function StudyDashboard() {
         }`}
         style={{ transitionDelay: '400ms' }}
       >
-        <UpcomingStudySessions animate={animate} />
+        <NotificationDashboard sessions={sessions.filter(session => {
+          if (!session.startTime) return false;
+          const sessionDate = new Date(session.startTime);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          return sessionDate.setHours(0, 0, 0, 0) === today.getTime();
+        })} />
         <RecentNotes animate={animate} />
       </div>
     </div>

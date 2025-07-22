@@ -108,9 +108,25 @@ const Calendar = ({ events, onDateSelect }) => {
   
   // Custom rendering for events
   const renderEventContent = (eventInfo) => {
+    const status = eventInfo.event.extendedProps.status;
+    let eventClass = "";
+    let icon = null;
+    let tag = null;
+    if (status === "completed") {
+      eventClass = "calendar-event-completed";
+      icon = <span className="mr-1">✅</span>;
+    } else if (status === "missed") {
+      eventClass = "calendar-event-missed";
+      icon = <span className="mr-1">⚠️</span>;
+      tag = <span className="calendar-event-missed-tag ml-2">Missed</span>;
+    }
     return (
-      <div className="fc-event-main-content p-2 overflow-hidden cursor-pointer" style={{fontWeight: 'bold'}}>
-        <div className="font-bold">{eventInfo.event.title}</div>
+      <div className={`fc-event-main-content p-2 overflow-hidden cursor-pointer ${eventClass}`} style={{fontWeight: 'bold'}}>
+        <div className="font-bold flex items-center">
+          {icon}
+          <span className={status === 'completed' ? 'line-through' : ''}>{eventInfo.event.title}</span>
+          {tag}
+        </div>
         {selectedView !== 'dayGridMonth' && (
           <div className="text-xs flex items-center opacity-100">
             <Clock className="mr-1 h-3 w-3" />
@@ -314,6 +330,28 @@ const Calendar = ({ events, onDateSelect }) => {
             .fc-v-event, .fc-h-event {
               opacity: 1 !important;
               z-index: 10 !important;
+            }
+
+            .calendar-event-completed {
+              background: rgba(34,197,94,0.12) !important;
+              color: #22c55e !important;
+              text-decoration: line-through;
+              opacity: 0.7 !important;
+            }
+            .calendar-event-missed {
+              background: rgba(239,68,68,0.12) !important;
+              color: #ef4444 !important;
+              opacity: 0.8 !important;
+            }
+            .calendar-event-missed-tag {
+              background: #ef4444;
+              color: #fff;
+              border-radius: 8px;
+              font-size: 0.7em;
+              padding: 0 6px;
+              margin-left: 4px;
+              font-weight: 600;
+              opacity: 0.85;
             }
           `}</style>
           

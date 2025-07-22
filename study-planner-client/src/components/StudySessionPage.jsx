@@ -692,9 +692,36 @@ export function StudySessionPage() {
           <h1 className="text-2xl font-bold">Study Session</h1>
         </div>
         <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" className="flex gap-2" onClick={() => navigate("/dashboard")}>
-            <ArrowLeft className="h-4 w-4" />
-            <span>Dashboard</span>
+          <Button 
+            variant="default" 
+            size="sm" 
+            className="bg-primary hover:bg-primary/90 text-white px-6 py-2 font-semibold rounded-md shadow"
+            onClick={async () => {
+              const confirmed = window.confirm('Are you sure you want to finish this session? This will mark it as complete and return you to the Study Plan.');
+              if (!confirmed) return;
+              // Mark session as complete (set progress to 100)
+              setSession(prev => ({ ...prev, progress: 100 }));
+              setIsSessionComplete(true);
+              // Optionally, call API to persist completion
+              try {
+                if (session.id) {
+                  await fetch(`${API_BASE_URL}/api/study-sessions/${session.id}`, {
+                    method: 'PUT',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ ...session, progress: 100 })
+                  });
+                }
+              } catch (err) {
+                console.error('Failed to mark session complete:', err);
+              }
+              // Navigate back to Study Plan
+              navigate('/study-plan');
+            }}
+          >
+            Finish Session
           </Button>
           <Button variant="outline" size="sm" className="flex gap-2" onClick={toggleFullscreen}>
             {isFullscreen ? (

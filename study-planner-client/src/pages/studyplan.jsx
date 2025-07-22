@@ -281,76 +281,62 @@ export default function StudyPlanPage() {
                   console.log('All sessions:', sessions);
                   console.log('Filtered sessions:', getFilteredSessions());
                   
-                  const calendarEvents = getFilteredSessions().map(session => {
-                    // Validate session has required fields
+                  const now = new Date();
+                  const calendarEvents = (sessions || []).map(session => {
                     if (!session._id || !session.startTime || !session.endTime || !session.subject) {
                       console.warn('Invalid session data:', session);
                       return null;
                     }
-                    
-                    // Format dates properly, ensuring ISO format
                     let startStr = session.startTime;
                     let endStr = session.endTime;
-                    
-                    // Create proper Date objects
                     let start, end;
                     try {
-                      // Handle string or Date object inputs
                       start = new Date(startStr);
                       end = new Date(endStr);
-                      
-                      // Validate dates are valid
                       if (isNaN(start.getTime()) || isNaN(end.getTime())) {
                         throw new Error('Invalid date');
                       }
-
-                      // Ensure the times are sufficiently different to display properly
                       const durationMs = end.getTime() - start.getTime();
-                      if (durationMs < 900000) { // less than 15 minutes
-                        // Make session at least 30 minutes long for visibility
-                        end = new Date(start.getTime() + 1800000); // add 30 minutes
-                        console.log(`Extended short session duration for ${session.subject}`);
+                      if (durationMs < 900000) {
+                        end = new Date(start.getTime() + 1800000);
                       }
-                      
-                      // Ensure the dates are properly formatted for FullCalendar
                       startStr = start.toISOString();
                       endStr = end.toISOString();
-                      
                     } catch (error) {
                       console.error(`Error parsing dates for session ${session._id}:`, error);
                       return null;
                     }
-                    
-                    // Get a vivid color for the subject
                     const color = getSubjectColor(session.subject);
-                    
-                    // Log each event creation for debugging
-                    console.log(`Creating event for ${session.subject}:`, {
-                      id: session._id,
-                      start: startStr,
-                      end: endStr,
-                      color: color
-                    });
-                    
-                    // Return a properly formatted event object for FullCalendar
+                    // Determine status
+                    let status = 'upcoming';
+                    if (end < now) {
+                      if (session.progress === 100) {
+                        status = 'completed';
+                      } else {
+                        status = 'missed';
+                      }
+                    }
                     return {
                       id: session._id,
                       title: session.subject,
-                      start: startStr, // Use ISO format string
-                      end: endStr,     // Use ISO format string
+                      start: startStr,
+                      end: endStr,
                       backgroundColor: color,
                       borderColor: color,
                       textColor: '#ffffff',
                       description: session.description || '',
                       allDay: false,
-                      display: 'block', // Force block display mode
+                      display: 'block',
                       extendedProps: {
                         description: session.description || '',
                         subjectId: session.subjectId || '',
-                        _id: session._id, // Ensure ID is available
+                        _id: session._id,
+                        status,
+                        progress: session.progress,
+                        originalSession: session
                       }
                     };
-                  }).filter(Boolean); // Remove any invalid events (null entries)
+                  }).filter(Boolean);
                   
                   console.log('Final calendar events:', calendarEvents);
                   

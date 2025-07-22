@@ -60,7 +60,7 @@ export default function NotificationDashboard({ sessions = [] }) {
         <CardHeader className="pb-2">
           <CardTitle className="text-lg font-bold flex items-center">
             <Bell className="h-5 w-5 text-primary mr-2" />
-            Upcoming Sessions
+            Today's Sessions
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -84,6 +84,21 @@ export default function NotificationDashboard({ sessions = [] }) {
                 dateDisplay = formatDateRelative(sessionDate);
               }
 
+              // Status logic
+              const now = new Date();
+              const sessionEnd = new Date(session.endTime);
+              let status = 'Upcoming';
+              let statusColor = 'bg-blue-100 text-blue-700';
+              if (sessionEnd < now) {
+                if (session.progress === 100) {
+                  status = 'Completed';
+                  statusColor = 'bg-green-100 text-green-700';
+                } else {
+                  status = 'Missed';
+                  statusColor = 'bg-red-100 text-red-700';
+                }
+              }
+
               return (
                 <div 
                   key={index} 
@@ -104,6 +119,7 @@ export default function NotificationDashboard({ sessions = [] }) {
                         style={{ backgroundColor: subjectColor }}
                       />
                       <span className="text-xs">{session.subject}</span>
+                      <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] font-semibold ${statusColor}`}>{status}</span>
                     </div>
                     <div className="flex justify-between items-center mt-2">
                       <div className="flex items-center gap-1 text-xs text-muted-foreground">

@@ -43,13 +43,13 @@ const PageTransition = ({ children }) => {
 };
 
 // Layout component with sidebar
-const Layout = ({ children }) => {
+const Layout = ({ children, hideNav }) => {
   return (
     <div className="flex h-screen">
-      <Sidebar />
+      {!hideNav && <Sidebar />}
       <main className="flex-1 overflow-y-auto">
         <PageTransition>
-        {children}
+          {children}
         </PageTransition>
       </main>
     </div>
@@ -105,7 +105,7 @@ function App() {
               path="/study-session"
               element={
                 <ProtectedRoute>
-                  <Layout>
+                  <Layout hideNav={true}>
                     <StudySession />
                   </Layout>
                 </ProtectedRoute>
