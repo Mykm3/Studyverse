@@ -2,17 +2,17 @@
 
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Brain, ArrowLeft, Maximize2, Minimize2, BookOpen, HelpCircle, BrainCircuit, Sparkles, Clock, Download, Book } from 'lucide-react'
+import { Brain, ArrowLeft, Maximize2, Minimize2, BookOpen, HelpCircle, BrainCircuit, Sparkles, Clock, Download, Book, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Button } from "./ui/Button"
 import { useToast } from "./ui/use-toast"
 import { SessionTimer } from "./SessionTimer"
-import { DocumentViewer } from "./DocumentViewer"
 import { SessionProgress } from "./SessionProgress"
 import { Card, CardContent } from "./ui/Card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/Tabs"
 import { Input } from "./ui/Input"
-import PDFViewer from "./PDFViewer"
 import axios from "axios"
+import PDFViewerReact from "./PDFViewerReact"
+import DocumentViewer from "./DocumentViewer"
 
 // API base URL
 const API_BASE_URL = "http://localhost:5000";
@@ -36,15 +36,15 @@ export function StudySessionPage() {
     title: "",
     subject: "",
     duration: 60, // default duration in minutes
-  document: {
+    document: {
       id: "",
-    title: "Loading document...",
-    type: "pdf",
-    totalPages: 1,
-    currentPage: 1,
-  },
-  progress: 0,
-  startTime: null,
+      title: "Loading document...",
+      type: "pdf",
+      totalPages: 1,
+      currentPage: 1,
+    },
+    progress: 0,
+    startTime: null,
     endTime: null
   })
   const [isFullscreen, setIsFullscreen] = useState(false)
@@ -70,6 +70,19 @@ export function StudySessionPage() {
   const [documentError, setDocumentError] = useState(null)
   const [iframeLoading, setIframeLoading] = useState(true)
   const [iframeError, setIframeError] = useState(null)
+  
+  // We keep iframe loading/error states for compatibility with existing code
+  // but the actual PDF viewing is handled by the PDFViewerReact component
+
+  // Clean up when component unmounts
+  useEffect(() => {
+    return () => {
+      // Clean up timer
+      if (isTimerRunning) {
+        pauseSession();
+      }
+    };
+  }, [isTimerRunning]);
 
   // Force using the view-pdf endpoint for all PDFs - moved to component top level
   useEffect(() => {
@@ -91,26 +104,54 @@ export function StudySessionPage() {
     }
   }, [session.document?.id, session.document?.type, session.document?.fileUrl]);
 
+  // Update the browser blocking detection useEffect
+  useEffect(() => {
+    // Only run this if we have a PDF document
+    if (session.document?.type === 'pdf' && session.document?.fileUrl) {
+      // Create a timeout to check if the iframe fails to load
+      const blockDetectionTimeout = setTimeout(() => {
+        // If iframe is still loading after 5 seconds, it might be blocked
+        if (iframeLoading) {
+          console.warn('PDF iframe may be blocked by the browser');
+          setIframeError('Your browser may be blocking this content. Try using the download option instead.');
+          setIframeLoading(false);
+        }
+      }, 5000);
+      
+      return () => clearTimeout(blockDetectionTimeout);
+    }
+  }, [session.document?.fileUrl, session.document?.type, iframeLoading]);
+
   // Fetch the document and start the session when the component mounts
   useEffect(() => {
-    // Get the session ID from URL if available
+    // Get the session ID and note ID from URL if available
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get('sessionId');
+    const noteId = params.get('noteId');
     
     if (sessionId) {
-      fetchSessionDocument(sessionId);
+      if (noteId) {
+        // If both sessionId and noteId are provided, fetch the specific document
+        fetchSpecificDocument(sessionId, noteId);
+      } else {
+        // Otherwise, fetch any document associated with the session
+        fetchSessionDocument(sessionId);
+      }
     } else {
       // Don't fetch documents unless a session is started from the study plan page
       setIsLoading(false);
     }
-    
-    // Clean up when component unmounts
+  }, []);
+
+  // Clean up when component unmounts
+  useEffect(() => {
     return () => {
+      // Clean up timer
       if (isTimerRunning) {
         pauseSession();
       }
-    }
-  }, []);
+    };
+  }, [isTimerRunning]);
 
   // Fetch document for a specific study session
   const fetchSessionDocument = async (sessionId) => {
@@ -223,123 +264,89 @@ export function StudySessionPage() {
     }
   };
 
-  // Fetch the most recent document instead of a specific title
-  const fetchDocument = async () => {
+  // Fetch a specific document by ID for a study session
+  const fetchSpecificDocument = async (sessionId, noteId) => {
     setIsLoading(true);
     setDocumentError(null);
     setIframeLoading(true);
     setIframeError(null);
+    
     try {
+      // First fetch the session to get basic session data
       const config = getAuthHeaders();
-      let response;
-      let viewUrl;
+      const sessionResponse = await axios.get(`${API_BASE_URL}/api/study-sessions/${sessionId}`, config);
       
-      // If we have a subject in the session, try to get documents for that subject first
-      if (session.subject && session.subject !== "Study Session") {
-        console.log(`Fetching documents for subject: ${session.subject}`);
-        
-        // Try to get documents for this specific subject
-        response = await axios.get(
-          `${API_BASE_URL}/api/notes/by-subject/${encodeURIComponent(session.subject)}`, 
-          config
-        );
-        
-        // If no documents found for this subject, will fall back to getting all documents
-        if (!response.data.success || !response.data.data || response.data.data.length === 0) {
-          console.log(`No documents found for subject: ${session.subject}, fetching all documents`);
-          response = await axios.get(`${API_BASE_URL}/api/notes`, config);
-        }
-      } else {
-        // No subject specified, just get all documents
-        console.log("Fetching the most recent document");
-        response = await axios.get(`${API_BASE_URL}/api/notes`, config);
+      if (!sessionResponse.data) {
+        throw new Error("Session not found");
       }
       
-      if (response.data.success && response.data.data && response.data.data.length > 0) {
-        // Get the most recent document (should be first in the array if sorted by createdAt)
-        const document = response.data.data[0];
-        
-        console.log("Found document:", document.title);
-        
-        // Determine document type
-        const fileType = document.fileUrl?.split('.').pop().toLowerCase() || 'pdf';
-        
-        // Determine the appropriate URL to use
-        if (fileType === 'pdf') {
-          // Add auth token to PDF URL as a query parameter
-          const token = localStorage.getItem('token');
-          viewUrl = `${API_BASE_URL}/api/notes/view-pdf/${document._id}?token=${token}`;
-        } else {
-          // For non-PDFs, prioritize secure Cloudinary URL if available
-          viewUrl = document.cloudinaryUrl || document.fileUrl || document.originalFileUrl;
-          console.log("Using standard document URL:", viewUrl);
-        }
-        
-        // Update session with document data and subject if not already set
-        setSession(prev => ({
-          ...prev,
-          title: document.title,
-          subject: prev.subject !== "Study Session" ? prev.subject : document.subject || "Study Session",
-          document: {
-            id: document._id,
-            title: document.title,
-            type: fileType,
-            totalPages: 1, // Since we don't have actual page info
-            currentPage: 1,
-            fileUrl: viewUrl,
-            originalFileUrl: document.originalFileUrl,
-            cloudinaryUrl: document.cloudinaryUrl
-          }
-        }));
-
-        // Log document info to help with debugging
-        console.log("Document data received:", {
+      const sessionData = sessionResponse.data;
+      
+      // Then fetch the specific document
+      const documentResponse = await axios.get(`${API_BASE_URL}/api/notes/view/${noteId}`, config);
+      
+      if (!documentResponse.data || !documentResponse.data.success) {
+        throw new Error("Document not found");
+      }
+      
+      const document = documentResponse.data.data;
+      
+      // Determine document type
+      const fileType = document.fileUrl?.split('.').pop().toLowerCase() || 'pdf';
+      
+      // Update session with document data (without fileUrl for now)
+      setSession(prev => ({
+        ...prev,
+        title: sessionData.description || document.title,
+        subject: sessionData.subject || "Study Session",
+        document: {
           id: document._id,
           title: document.title,
-          subject: document.subject,
-          fileUrl: document.fileUrl ? "Present" : "Missing",
-          originalFileUrl: document.originalFileUrl ? "Present" : "Missing",
-          cloudinaryUrl: document.cloudinaryUrl ? "Present" : "Missing",
-          urlToUse: viewUrl,
-          fileType: fileType
-        });
+          type: fileType,
+          totalPages: 1,
+          currentPage: 1,
+          fileUrl: null // Will be set after blob URL is created
+        }
+      }));
 
-        // Update messages to include the document title
-        setMessages([
-          {
-            role: "assistant",
-            content: `Hello! I'm your AI study assistant. How can I help you with "${document.title}"?`,
-            timestamp: new Date().toISOString(),
-          }
-        ]);
+      // Update messages to include the document title
+      setMessages([
+        {
+          role: "assistant",
+          content: `Hello! I'm your AI study assistant. How can I help you with "${document.title}"?`,
+          timestamp: new Date().toISOString(),
+        }
+      ]);
 
-        toast({
-          title: "Document Loaded",
-          description: `"${document.title}" has been successfully loaded.`,
-        });
-      } else {
-        // No documents found
-        const subjectMessage = session.subject && session.subject !== "Study Session" 
-          ? `No documents found for subject "${session.subject}". Please upload documents for this subject in the Notebook first.`
-          : "No documents found. Please upload a document in the Notebook first.";
-        throw new Error(subjectMessage);
+          // Get the direct URL to the document
+    const token = localStorage.getItem('token');
+    const directUrl = `${API_BASE_URL}/api/notes/serve/${document._id}?token=${token}`;
+    
+    // Update the session with the direct URL
+    setSession(prev => ({
+      ...prev,
+      document: {
+        ...prev.document,
+        fileUrl: directUrl
       }
-    } catch (error) {
-      console.error('Error fetching document:', error);
+    }));
+    
+    toast({
+      title: "Document Loaded",
+      description: `"${document.title}" has been successfully loaded.`,
+    });
       
-      let errorMessage = "Failed to load a document.";
+    } catch (error) {
+      console.error('Error fetching specific document:', error);
+      
+      let errorMessage = "Failed to load the selected document.";
       
       // Check for specific error types
       if (error.response) {
-        // The request was made and the server responded with a status code
-        // that falls out of the range of 2xx
         console.log("Server error response:", error.response.data);
         
         if (error.response.status === 404) {
-          const subjectMessage = session.subject && session.subject !== "Study Session" 
-            ? `No documents found for subject "${session.subject}". Please upload documents for this subject in the Notebook first.`
-            : "No documents found. Please upload a document in the Notebook first.";
-          errorMessage = subjectMessage;
+          errorMessage = "The selected document was not found. It may have been deleted.";
         } else if (error.response.status === 401) {
           errorMessage = "Authentication error. Please log in again.";
           // Redirect to login
@@ -348,10 +355,8 @@ export function StudySessionPage() {
           errorMessage = error.response.data.error || "Server error. Please try again later.";
         }
       } else if (error.request) {
-        // The request was made but no response was received
         errorMessage = "No response from server. Please check your internet connection.";
       } else {
-        // Something happened in setting up the request that triggered an Error
         errorMessage = error.message;
       }
       
@@ -579,237 +584,100 @@ export function StudySessionPage() {
     }, 2000)
   }
 
-  // Custom document content renderer
+  // Render the document content based on document type
   const renderDocumentContent = () => {
     if (isLoading) {
       return (
-        <div className="h-full flex flex-col items-center justify-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
-          <p className="text-lg font-medium">Loading document...</p>
+        <div className="flex flex-col items-center justify-center h-full">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+          <p className="text-muted-foreground">Loading document...</p>
         </div>
       );
     }
 
     if (documentError) {
       return (
-        <div className="h-full flex flex-col items-center justify-center">
-          <div className="text-red-500 mb-4">
-            <p className="text-lg font-medium mb-2">Error Loading Document</p>
-            <p className="text-sm text-center max-w-md">{documentError}</p>
-          </div>
-          
-          {documentError.includes("No documents found for") ? (
-            <div className="flex flex-col items-center mt-4">
-              <p className="text-sm text-center text-muted-foreground max-w-md mb-4">
-                You need to upload documents for this subject in the Notebook before they can be viewed here.
-              </p>
-              <Button 
-                variant="default"
-                onClick={() => navigate("/notebook")}
-              >
-                <Book className="h-4 w-4 mr-2" />
-                Go to Notebook
-              </Button>
-            </div>
-          ) : (
-            <Button 
-              variant="outline"
-              className="mt-4"
-              onClick={() => {
-                if (window.location.search.includes('sessionId')) {
-                  const params = new URLSearchParams(window.location.search);
-                  const sessionId = params.get('sessionId');
-                  if (sessionId) {
-                    fetchSessionDocument(sessionId);
-                  }
-                } else {
-                  fetchDocument();
-                }
-              }}
-            >
-              Try Again
+        <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+          <div className="bg-red-100 dark:bg-red-900/20 p-6 rounded-lg max-w-md">
+            <HelpCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h3 className="text-lg font-medium mb-2">Document Error</h3>
+            <p className="text-muted-foreground mb-4">{documentError}</p>
+            <Button onClick={() => navigate('/notebook')}>
+              Go to Notebook
             </Button>
-          )}
+          </div>
         </div>
       );
     }
 
-    // If the document has a fileUrl, display it
-    if (session.document.fileUrl) {
-      const handleIframeLoad = () => {
-        console.log("Document loaded successfully in viewer:", session.document.fileUrl);
-        setIframeLoading(false);
-        setIframeError(null);
-      };
-
-      const handleIframeError = (e) => {
-        console.log("Error loading document iframe:", e);
-        console.log("Document URL that failed:", session.document.fileUrl);
-        setIframeLoading(false);
-        
-        // Try different URL options
-        if (!iframeError) {
-          setIframeError("Trying alternative document source...");
-          
-          // Always use our dedicated view-pdf endpoint which ensures proper headers
-          const token = localStorage.getItem('token');
-          const newUrl = `${API_BASE_URL}/api/notes/view-pdf/${session.document.id}?token=${token}`;
-          console.log("Using view-pdf endpoint URL:", newUrl);
-            
-          // Update the document URL to use the view-pdf endpoint
-            setSession(prev => ({
-              ...prev,
-              document: {
-                ...prev.document,
-                fileUrl: newUrl
-              }
-            }));
-            
-            // Reset iframe state to try loading again
-            setIframeLoading(true);
-            setIframeError(null);
-        } else {
-          // If we've already tried alternatives and they failed, offer direct download
-          console.log("PDF viewer failed after retry, offering download option");
-          setIframeError("Document cannot be displayed in the viewer");
-        }
-      };
-
-      // Function to generate a direct download link with auth token
+    // For PDF documents, use our PDFViewerReact component
+    if (session.document.type === 'pdf') {
+      // Handle direct download of the document
       const handleDirectDownload = async () => {
         try {
-          // Always get a fresh download URL with download parameter and auth token
           const token = localStorage.getItem('token');
-          const downloadUrl = `${API_BASE_URL}/api/notes/download/${session.document.id}?download=true&token=${token}`;
           
+          // Use the serve endpoint with download parameter
+          const downloadUrl = `${API_BASE_URL}/api/notes/serve/${session.document.id}?token=${token}&download=true`;
+          
+          // Notify user
           toast({
-            title: "Opening Document",
-            description: "Document will open in a new tab...",
+            title: "Downloading Document",
+            description: "Your document will download shortly"
           });
           
-          // Open in new tab
-          window.open(downloadUrl, '_blank');
-          
-          toast({
-            title: "Document Opened",
-            description: "If the document doesn't open, check your pop-up blocker settings.",
-          });
+          // Create a temporary link and click it to download
+          const link = document.createElement('a');
+          link.href = downloadUrl;
+          link.setAttribute('download', session.document.title || 'document');
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
         } catch (error) {
-          console.error("Error opening document:", error);
-          
+          console.error("Download error:", error);
           toast({
-            title: "Error Opening Document",
-            description: "Could not open the document. Please try again later.",
+            title: "Download Failed",
+            description: "Failed to download the document. Please try again later.",
             variant: "destructive"
           });
         }
       };
-
+      
       return (
-        <div className="h-full flex flex-col relative">
-          {iframeLoading && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white bg-opacity-90 z-10 backdrop-blur-sm">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary mb-4"></div>
-              <p className="text-lg font-medium">Loading document content...</p>
-            </div>
-          )}
-          
-          {iframeError && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-white bg-opacity-90 z-10 backdrop-blur-sm">
-              <p className="text-lg font-medium mb-2 text-primary">{iframeError}</p>
-              
-              {iframeError === "Document opened in a new tab" ? (
-                <p className="text-sm text-center max-w-md mb-4">The document has been opened in a new browser tab.</p>
-              ) : iframeError.includes("Trying") ? (
-                <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-primary mb-4"></div>
-              ) : (
-                <div className="flex flex-col items-center gap-4 mt-4 w-72">
-                  <p className="text-sm text-center text-muted-foreground">
-                    The document cannot be displayed in the built-in viewer.
-                    Please download it or open it in a new tab instead.
-                  </p>
-                  <div className="flex gap-2 w-full">
-                    <Button 
-                      variant="default"
-                      className="flex-1"
-                      onClick={handleDirectDownload}
-                    >
-                      <Download className="h-4 w-4 mr-2" />
-                      Download Document
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-          
-          <div className="w-full bg-muted/50 p-2 flex justify-between items-center">
-            <div className="text-sm font-medium flex items-center gap-2">
-              <Book className="h-4 w-4 text-muted-foreground" />
-              {session.document.title}
-              <span className="text-xs text-muted-foreground">({session.subject})</span>
-            </div>
-            <div className="flex gap-2">
-              <Button 
-                variant="ghost" 
-                size="sm" 
-                className="text-xs" 
-                onClick={handleDirectDownload}
-              >
-                <Download className="h-3 w-3 mr-1" />
-                Download
-              </Button>
-            </div>
-          </div>
-          
-          {/* Use our specialized PDFViewer for PDFs */}
-          {session.document.type === 'pdf' ? (
-            <div className="w-full h-full flex-1 min-h-[600px]">
-              <PDFViewer 
-                fileUrl={session.document.fileUrl}
-                onError={(error) => {
-                  console.error("PDFViewer error:", error);
-                  setIframeError("Could not load PDF. Try downloading instead.");
-                }}
-              />
-            </div>
-          ) : (
-            <iframe 
-              src={session.document.fileUrl}
-              className="w-full h-full rounded-lg border-0 shadow-inner flex-1"
-              title={session.document.title}
-              allowFullScreen
-              onLoad={handleIframeLoad}
-              onError={handleIframeError}
-              style={{ minHeight: "600px" }}
-            />
-          )}
-        </div>
+        <PDFViewerReact 
+          fileUrl={session.document.fileUrl}
+          title={session.document.title}
+          onDownload={handleDirectDownload}
+        />
       );
     }
-
-    // Fallback content if no document is loaded
+    
+    // For other document types, provide a download link
     return (
-      <div className="prose max-w-none p-6 h-full flex flex-col items-center justify-center text-center">
-        <BookOpen className="h-16 w-16 text-muted-foreground/30 mb-4" />
-        <h1 className="text-xl font-semibold mb-2">No Study Session Selected</h1>
-        <p className="text-muted-foreground">
-          Please start a study session from the Study Plan page or select a document from the Notebook.
-        </p>
-        <div className="flex gap-4 mt-6">
-        <Button 
-          variant="outline"
-          onClick={() => navigate("/notebook")}
-        >
-            <Book className="h-4 w-4 mr-2" />
-          Browse Documents
-        </Button>
+      <div className="flex flex-col items-center justify-center h-full p-6 text-center">
+        <div className="bg-muted/50 p-6 rounded-lg max-w-md">
+          <Book className="h-12 w-12 text-primary mx-auto mb-4" />
+          <h3 className="text-lg font-medium mb-2">{session.document.title}</h3>
+          <p className="text-muted-foreground mb-4">
+            This document type ({session.document.type}) cannot be viewed directly in the browser.
+          </p>
           <Button 
-            variant="default"
-            onClick={() => navigate("/study-plan")}
+            onClick={() => {
+              const token = localStorage.getItem('token');
+              const downloadUrl = `${API_BASE_URL}/api/notes/serve/${session.document.id}?token=${token}&download=true`;
+              
+              // Create a temporary link and click it to download
+              const link = document.createElement('a');
+              link.href = downloadUrl;
+              link.setAttribute('download', session.document.title || 'document');
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+            className="bg-primary hover:bg-primary/90"
           >
-            <Brain className="h-4 w-4 mr-2" />
-            Study Plan
+            <Download className="h-4 w-4 mr-2" />
+            Download Document
           </Button>
         </div>
       </div>

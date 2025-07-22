@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { useSubjects } from "../contexts/SubjectContext";
+import FileSelectionModal from "../components/FileSelectionModal";
 
 // Generate a color based on subject name
 export const getSubjectColor = (subject) => {
@@ -54,6 +55,10 @@ export default function StudyPlanPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [sessionTypeFilter, setSessionTypeFilter] = useState("upcoming");
+  
+  // State for file selection modal
+  const [showFileSelector, setShowFileSelector] = useState(false);
+  const [selectedSession, setSelectedSession] = useState(null);
   
   // Get today's date in YYYY-MM-DD format
   const today = new Date().toISOString().split("T")[0];
@@ -174,6 +179,20 @@ export default function StudyPlanPage() {
   const handleDateSelect = (selectInfo) => {
     const startTime = selectInfo.startStr;
     navigate(`/add-session?startTime=${encodeURIComponent(startTime)}`);
+  };
+
+  // Add a new function to handle launching a session with file selection
+  const handleLaunchSession = (session) => {
+    setSelectedSession(session);
+    setShowFileSelector(true);
+  };
+  
+  // Add a function to handle file selection and navigate to study session
+  const handleFileSelected = (file) => {
+    setShowFileSelector(false);
+    
+    // Navigate to study session with both session ID and file ID
+    navigate(`/study-session?sessionId=${selectedSession._id}&noteId=${file._id}`);
   };
 
   if (isLoading) {
@@ -411,7 +430,7 @@ export default function StudyPlanPage() {
                                 </div>
                                 <Button 
                                   className="bg-primary hover:bg-primary/90"
-                                  onClick={() => navigate(`/study-session?sessionId=${session._id}`)}
+                                  onClick={() => handleLaunchSession(session)}
                                 >
                                   Start Session
                                 </Button>
@@ -501,8 +520,9 @@ export default function StudyPlanPage() {
                                 description: "Your quick study session has been created"
                               });
                               
-                              // Navigate to the study session
-                              navigate(`/study-session?sessionId=${data._id}`);
+                              // Instead of navigating directly, set the selected session and show file selector
+                              setSelectedSession(data);
+                              setShowFileSelector(true);
                             })
                             .catch(error => {
                               console.error("Error creating quick session:", error);
@@ -519,7 +539,7 @@ export default function StudyPlanPage() {
                       </div>
                     </div>
                     
-                    {/* Upcoming Sessions from Plan Tab */}
+                    {/* Upcoming Sessions from Plan */}
                     <div className="bg-muted/50 rounded-lg p-4">
                       <h3 className="text-lg font-medium mb-2">Upcoming Sessions from Plan</h3>
                       {sessions.filter(session => {
@@ -760,6 +780,14 @@ export default function StudyPlanPage() {
           </TabsContent>
         </Tabs>
       </main>
+      
+      {/* Add the FileSelectionModal */}
+      <FileSelectionModal 
+        open={showFileSelector}
+        onClose={() => setShowFileSelector(false)}
+        subject={selectedSession?.subject}
+        onSelectFile={handleFileSelected}
+      />
     </div>
   )
 }

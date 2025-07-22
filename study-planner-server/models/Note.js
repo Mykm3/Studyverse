@@ -5,6 +5,9 @@ const noteSchema = new mongoose.Schema({
   title: String,
   fileUrl: String,
   publicId: String,
+  fileName: String, // Name of the file as stored in Supabase
+  publicUrl: String, // Publicly accessible URL from Supabase
+  uploadDate: { type: Date, default: Date.now },
   userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'

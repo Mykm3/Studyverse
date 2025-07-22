@@ -2,31 +2,60 @@
 
 
 const multer = require('multer');
-const cloudinary = require('../config/cloudinary');
+const supabase = require('../config/supabaseClient');
 
 const storage = multer.memoryStorage();
 
-const uploadToCloudinary = (buffer, options) => {
-  return new Promise((resolve, reject) => {
-    cloudinary.uploader.upload_stream(
-      {
-        resource_type: 'raw',
-        folder: 'pdf-notes',
-        allowed_formats: ['pdf'],
-        public_id: options.public_id,
-        use_filename: true,
-        unique_filename: false,
-      },
-      (error, result) => {
-        if (error) reject(error);
-        else resolve(result);
-      }
-    ).end(buffer);
+const uploadToSupabase = async (buffer, filename) => {
+  const timestamp = Date.now();
+  const path = `${timestamp}_${filename}`;
+
+  // Upload to Supabase Storage
+  const { data, error } = await supabase.storage.from('studyverse-uploads').upload(path, buffer, {
+    contentType: 'application/octet-stream',
+    upsert: true,
   });
+  if (error) throw error;
+
+  // Get public URL
+  const { data: publicUrlData } = supabase.storage.from('studyverse-uploads').getPublicUrl(path);
+  if (!publicUrlData || !publicUrlData.publicUrl) throw new Error('Failed to get public URL');
+
+  return {
+    path,
+    publicUrl: publicUrlData.publicUrl,
+  };
 };
 
 const validateFile = (file) => {
-  const allowedTypes = ['application/pdf'];
+  const allowedTypes = [
+    // Document formats
+    'application/pdf',
+    'text/plain',
+    'text/markdown',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    // Media formats
+    'audio/mpeg',
+    'audio/mp3',
+    'audio/wav',
+    'video/mp4',
+    'video/quicktime',
+    // Image formats
+    'image/jpeg',
+    'image/png',
+    'image/svg+xml',
+    'image/gif',
+    // Archive formats
+    'application/zip',
+    'application/x-rar-compressed',
+    'application/x-7z-compressed'
+  ];
+  
   const maxSize = 10 * 1024 * 1024; // 10MB
   
   if (!allowedTypes.includes(file.mimetype)) {
@@ -55,6 +84,6 @@ const upload = multer({
   limits: {
     fileSize: 10 * 1024 * 1024, // 10MB
   }
-}).single('note'); // Changed from 'file' to 'note'
+}).single('note');
 
-module.exports = { upload, uploadToCloudinary, validateFile };
+module.exports = { upload, uploadToSupabase, validateFile };

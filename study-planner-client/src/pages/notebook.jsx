@@ -271,9 +271,9 @@ export default function NotebookPage() {
     console.log('[NotebookPage] Testing file URL:', url);
     
     try {
-      // Special handling for Cloudinary URLs to avoid repeated testing
-      if (url.includes('cloudinary.com')) {
-        console.log('[NotebookPage] Cloudinary URL detected, assuming accessible');
+      // Special handling for Supabase URLs to avoid repeated testing
+      if (url.includes('supabasecdn') || url.includes('supabase.co')) {
+        console.log('[NotebookPage] Supabase URL detected, assuming accessible');
         return true;
       }
       
@@ -383,32 +383,6 @@ export default function NotebookPage() {
   const toggleSortOrder = useCallback(() => {
     setSortOrder(sortOrder === "asc" ? "desc" : "asc");
   }, [sortOrder]);
-
-  // Check Cloudinary configuration
-  const checkCloudinaryConfig = useCallback(async () => {
-    try {
-      console.log('[NotebookPage] Checking Cloudinary configuration...');
-      const response = await api.get('/api/notes/check-cloudinary');
-      
-      console.log('[NotebookPage] Cloudinary configuration:', response);
-      
-      toast({
-        title: "Cloudinary Configuration",
-        description: `Cloud Name: ${response.config.cloudName}, API Key: ${response.config.apiKey}, API Secret: ${response.config.apiSecret}, Secure: ${response.config.secure}`,
-        duration: 10000
-      });
-      
-      return response;
-    } catch (error) {
-      console.error('[NotebookPage] Error checking Cloudinary configuration:', error);
-      toast({
-        title: "Error Checking Cloudinary",
-        description: error.message || "Failed to check Cloudinary configuration",
-        variant: "destructive",
-        duration: 10000
-      });
-    }
-  }, [toast]);
 
   // Clear all notes and subjects
   const clearAllData = useCallback(async () => {

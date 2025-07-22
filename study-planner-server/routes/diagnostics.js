@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
-const cloudinary = require('../config/cloudinary');
 const mongoose = require('mongoose');
 const auth = require('../middleware/auth');
+const supabase = require('../config/supabaseClient');
 
 // Apply authentication middleware to all routes
 router.use(auth);
@@ -26,12 +26,6 @@ router.get('/', async (req, res) => {
         host: mongoose.connection.host || 'Unknown',
         name: mongoose.connection.name || 'Unknown',
       },
-      cloudinary: {
-        configured: !!(process.env.CLOUDINARY_CLOUD_NAME && 
-                       process.env.CLOUDINARY_API_KEY && 
-                       process.env.CLOUDINARY_API_SECRET),
-        cloudName: process.env.CLOUDINARY_CLOUD_NAME || 'Not configured'
-      },
       user: {
         id: req.user._id,
       }
@@ -46,40 +40,6 @@ router.get('/', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to get system diagnostics'
-    });
-  }
-});
-
-// Test Cloudinary connection
-router.get('/cloudinary-test', async (req, res) => {
-  console.log('[Diagnostics] Testing Cloudinary connection');
-
-  try {
-    if (!process.env.CLOUDINARY_CLOUD_NAME ||
-        !process.env.CLOUDINARY_API_KEY ||
-        !process.env.CLOUDINARY_API_SECRET) {
-      return res.status(500).json({
-        success: false,
-        error: 'Cloudinary credentials are not properly configured'
-      });
-    }
-
-    // Attempt to fetch account info from Cloudinary
-    const result = await cloudinary.api.ping();
-    
-    res.json({
-      success: true,
-      message: 'Successfully connected to Cloudinary',
-      cloudName: process.env.CLOUDINARY_CLOUD_NAME,
-      status: result.status || 'OK'
-    });
-  } catch (error) {
-    console.error('[Diagnostics] Cloudinary connection test failed:', error);
-    res.status(500).json({
-      success: false,
-      error: 'Failed to connect to Cloudinary',
-      message: error.message,
-      code: error.http_code || error.code
     });
   }
 });
@@ -119,6 +79,16 @@ router.get('/mongodb-test', async (req, res) => {
       error: 'Failed to test MongoDB connection',
       message: error.message
     });
+  }
+});
+
+router.get('/supabase-test', async (req, res) => {
+  try {
+    const { data, error } = await supabase.storage.from('studyverse-uploads').list('');
+    if (error) throw error;
+    return res.json({ message: 'Supabase connected!', files: data });
+  } catch (err) {
+    return res.status(500).json({ message: 'Supabase connection failed', error: err.message });
   }
 });
 

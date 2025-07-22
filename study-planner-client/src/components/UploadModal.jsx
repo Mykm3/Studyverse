@@ -304,13 +304,13 @@ export default function UploadModal({ open, onClose, onFilesSelected, subjectId 
       console.log('[UploadModal] Raw upload response:', response);
 
       // Validate the response
-      if (!response || !response.fileUrl) {
+      if (!response || !response.publicUrl) {
         console.error('[UploadModal] Invalid response from server:', response);
         throw new Error('No file URL received from server');
       }
 
       // Ensure HTTPS URL
-      const fileUrl = response.fileUrl.replace('http://', 'https://');
+      const fileUrl = response.publicUrl.replace('http://', 'https://');
       
       console.log('[UploadModal] Upload successful:', {
         ...response,

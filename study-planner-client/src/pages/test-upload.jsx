@@ -41,7 +41,7 @@ export default function TestUploadPage() {
           <div className="flex items-start">
             <div className="bg-primary text-primary-foreground rounded-full w-5 h-5 flex items-center justify-center text-xs font-medium mr-2 mt-0.5">3</div>
             <p>The tester will verify: 
-              <span className="font-medium text-foreground">Cloudinary upload</span> → 
+              <span className="font-medium text-foreground">Supabase upload</span> → 
               <span className="font-medium text-foreground">MongoDB save</span> → 
               <span className="font-medium text-foreground">File accessibility</span>
             </p>
@@ -60,9 +60,9 @@ export default function TestUploadPage() {
         <h2 className="text-lg font-medium text-amber-800 mb-2">Troubleshooting</h2>
         <div className="space-y-3 text-sm text-amber-700">
           <div>
-            <h3 className="font-medium">If Cloudinary upload fails:</h3>
+            <h3 className="font-medium">If Supabase upload fails:</h3>
             <ul className="list-disc pl-5 mt-1">
-              <li>Check your Cloudinary API keys and configuration</li>
+              <li>Check your Supabase API keys and configuration</li>
               <li>Verify network connectivity</li>
               <li>Check server logs for detailed error messages</li>
             </ul>
@@ -80,10 +80,10 @@ export default function TestUploadPage() {
           <div>
             <h3 className="font-medium">If File URL is not accessible:</h3>
             <ul className="list-disc pl-5 mt-1">
-              <li>For Cloudinary URLs, this is normal and expected - Cloudinary URLs often return 401 unauthorized for direct access checks</li>
-              <li>Files uploaded to Cloudinary should still work when opened in your application</li>
-              <li>Verify the file exists in your Cloudinary dashboard</li>
+              <li>Verify the Supabase bucket has proper public access permissions</li>
+              <li>Files uploaded to Supabase should work when opened in your application</li>
               <li>Ensure you're using HTTPS URLs (not HTTP)</li>
+              <li>Check that the file exists in your Supabase dashboard</li>
             </ul>
           </div>
         </div>
