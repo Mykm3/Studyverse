@@ -712,10 +712,10 @@ export function StudySessionPage() {
         </div>
       </header>
 
-      <div className="grid grid-cols-12 gap-6 h-[calc(100vh-140px)]">
+      <div className="grid grid-cols-12 gap-6 min-h-0 h-[calc(100vh-140px)]">
         {/* Left Panel - Session Info & Timer */}
-        <div className="col-span-12 md:col-span-2 space-y-4">
-          <div className="bg-background rounded-lg shadow-md p-4 h-full flex flex-col">
+        <div className="col-span-12 md:col-span-2 space-y-4 min-h-0 h-full overflow-hidden">
+          <div className="bg-background rounded-lg shadow-md p-4 h-full flex flex-col min-h-0 overflow-hidden">
             <h2 className="text-lg font-semibold mb-4">{session.title}</h2>
 
             <div className="mb-4">
@@ -748,47 +748,49 @@ export function StudySessionPage() {
         </div>
 
         {/* Center Panel - Document Viewer */}
-        <div className="col-span-12 md:col-span-7 bg-background rounded-lg shadow-md">
-          {isLoading || documentError ? (
-            <div className="h-full p-4">
-              {renderDocumentContent()}
-            </div>
-          ) : (
-            <DocumentViewer
-              document={{
-                ...session.document,
-                content: renderDocumentContent
-              }}
-              currentPage={currentPage}
-              onPageChange={handlePageChange}
-              highlights={highlights}
-              onAddHighlight={handleAddHighlight}
-              notes={notes}
-              onNotesChange={handleNotesChange}
-              customContent={renderDocumentContent()}
-            />
-          )}
+        <div className="col-span-12 md:col-span-7 bg-background rounded-lg shadow-md h-full flex flex-col min-h-0 overflow-hidden">
+          <div className="pdf-scroll-area flex-1 min-h-0 overflow-auto">
+            {isLoading || documentError ? (
+              <div className="h-full p-4">
+                {renderDocumentContent()}
+              </div>
+            ) : (
+              <DocumentViewer
+                document={{
+                  ...session.document,
+                  content: renderDocumentContent
+                }}
+                currentPage={currentPage}
+                onPageChange={handlePageChange}
+                highlights={highlights}
+                onAddHighlight={handleAddHighlight}
+                notes={notes}
+                onNotesChange={handleNotesChange}
+                customContent={renderDocumentContent()}
+              />
+            )}
+          </div>
         </div>
 
         {/* Right Panel - AI Assistant */}
-        <div className="col-span-12 md:col-span-3 bg-background rounded-lg shadow-md">
-          <div className="h-full flex flex-col">
+        <div className="col-span-12 md:col-span-3 bg-background rounded-lg shadow-md h-full flex flex-col min-h-0 overflow-hidden">
+          <div className="h-full flex flex-col min-h-0 overflow-hidden">
             <div className="border-b p-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <BrainCircuit className="h-5 w-5 text-primary" />
-                AI Study Assistant
+                StudyVerse AI Assistant
               </h2>
             </div>
 
-            <Tabs defaultValue="chat" value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+            <Tabs defaultValue="chat" value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
               <TabsList className="mx-4 mt-2">
                 <TabsTrigger value="chat">Chat</TabsTrigger>
                 <TabsTrigger value="summary">Summary</TabsTrigger>
                 <TabsTrigger value="quiz">Quiz</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="chat" className="flex-1 flex flex-col p-4">
-                <div className="flex-1 overflow-auto mb-4 space-y-4">
+              <TabsContent value="chat" className="flex-1 flex flex-col p-4 min-h-0">
+                <div className="flex-1 overflow-auto mb-4 space-y-4 min-h-0">
                   {messages.map((message, index) => (
                     <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                       <div
