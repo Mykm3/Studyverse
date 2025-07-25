@@ -8,6 +8,7 @@ const authRoutes = require("./routes/auth");
 const studySessionRoutes = require('./routes/studySessions');
 const notesRoutes = require('./routes/notes');
 const diagnosticsRoutes = require('./routes/diagnostics');
+const groqRoutes = require('./routes/groq');
 
 // Debug logging
 console.log('Server configuration:');
@@ -153,6 +154,9 @@ app.use('/api/notes', notesRoutes);
 
 console.log('Mounting diagnostics routes at /api/diagnostics');
 app.use('/api/diagnostics', diagnosticsRoutes);
+
+console.log('Mounting groq routes at /api/groq');
+app.use('/api/groq', groqRoutes);
 
 // Protected route example
 app.get("/api/protected", (req, res) => {

@@ -16,6 +16,8 @@ import DocumentViewer from "./DocumentViewer"
 import { groqChatCompletion } from "@/utils/groq";
 import { jsonrepair } from "jsonrepair";
 import { marked } from "marked";
+import api from "@/utils/api";
+import { extractTextFromPDF } from "@/utils/pdfTextExtractor";
 
 // API base URL
 const API_BASE_URL = "http://localhost:5000";
@@ -73,6 +75,11 @@ export function StudySessionPage() {
   const [documentError, setDocumentError] = useState(null)
   const [iframeLoading, setIframeLoading] = useState(true)
   const [iframeError, setIframeError] = useState(null)
+  const [userAnswers, setUserAnswers] = useState([]);
+  const [showQuizResults, setShowQuizResults] = useState(false);
+  const [quizScore, setQuizScore] = useState(null);
+  const [extractedText, setExtractedText] = useState("");
+  const [extracting, setExtracting] = useState(false);
   
   // We keep iframe loading/error states for compatibility with existing code
   // but the actual PDF viewing is handled by the PDFViewerReact component
@@ -155,6 +162,41 @@ export function StudySessionPage() {
       }
     };
   }, [isTimerRunning]);
+
+  // Auto-extract PDF text when fileUrl is set
+  useEffect(() => {
+    async function extractIfPDF() {
+      if (
+        session.document?.type === "pdf" &&
+        session.document?.fileUrl &&
+        !extracting &&
+        !extractedText
+      ) {
+        setExtracting(true);
+        try {
+          // Fetch the PDF as a Blob
+          const response = await fetch(session.document.fileUrl);
+          const blob = await response.blob();
+          // Extract text
+          const text = await extractTextFromPDF(new File([blob], "document.pdf", { type: blob.type }));
+          setExtractedText(text);
+        } catch (err) {
+          console.error("PDF text extraction failed:", err);
+          setExtractedText("");
+          toast({
+            title: "PDF Extraction Failed",
+            description: "Could not extract text from the PDF.",
+            variant: "destructive"
+          });
+        } finally {
+          setExtracting(false);
+        }
+      }
+    }
+    extractIfPDF();
+    // Only run when fileUrl changes
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.document?.fileUrl]);
 
   // Fetch document for a specific study session
   const fetchSessionDocument = async (sessionId) => {
@@ -471,6 +513,7 @@ export function StudySessionPage() {
     setIsFullscreen(!isFullscreen)
   }
 
+  // Chat using backend proxy
   const handleSendMessage = async (e) => {
     if (e) e.preventDefault();
     if (!inputValue.trim()) return;
@@ -486,11 +529,14 @@ export function StudySessionPage() {
 
     try {
       const chatHistory = [
+        extractedText
+          ? { role: "system", content: `The following is the extracted text from the current study document:\n${extractedText}` }
+          : null,
         ...messages.map(({ role, content }) => ({ role, content })),
         { role: "user", content: inputValue },
-      ];
-      const groqRes = await groqChatCompletion(chatHistory);
-      const aiContent = groqRes.choices?.[0]?.message?.content || "[No response from AI]";
+      ].filter(Boolean);
+      const res = await api.post("/api/groq/chat", { messages: chatHistory });
+      const aiContent = res.choices?.[0]?.message?.content || "[No response from AI]";
       const aiResponse = {
         role: "assistant",
         content: aiContent,
@@ -511,15 +557,13 @@ export function StudySessionPage() {
     }
   };
 
+  // Summary generation using backend proxy
   const handleGenerateSummary = async () => {
     setIsGenerating(true);
     try {
-      const prompt = [
-        { role: "system", content: `You are an expert study assistant. Summarize the following document for a student. Document title: ${session.document.title}. Subject: ${session.subject}.` },
-        { role: "user", content: `Summarize the document in clear, concise bullet points and highlight key concepts.` },
-      ];
-      const groqRes = await groqChatCompletion(prompt);
-      const summaryText = groqRes.choices?.[0]?.message?.content || "[No summary generated]";
+      if (!extractedText) throw new Error("No extracted text available for summary.");
+      const res = await api.post("/api/groq/summary", { text: extractedText });
+      const summaryText = res.choices?.[0]?.message?.content || "[No summary generated]";
       setSummary(summaryText);
       setActiveTab("summary");
       toast({
@@ -533,24 +577,19 @@ export function StudySessionPage() {
     }
   };
 
+  // Quiz generation using backend proxy
   const handleGenerateQuiz = async () => {
     setIsGenerating(true);
     try {
-      const prompt = [
-        { role: "system", content: `You are an expert study assistant. Create a short quiz (3-5 questions) about the following document for a student. Document title: ${session.document.title}. Subject: ${session.subject}. Format the quiz as JSON: [{question, options, answer}]` },
-        { role: "user", content: `Generate a quiz about the document.` },
-      ];
-      const groqRes = await groqChatCompletion(prompt);
-      console.log('Groq raw response for quiz:', groqRes);
+      if (!extractedText) throw new Error("No extracted text available for quiz.");
+      const res = await api.post("/api/groq/quiz", { text: extractedText });
       let quizArr = [];
-      let content = groqRes.choices?.[0]?.message?.content || "";
-      // Extract the first JSON array from the response
-      const match = content.match(/\[([\s\S]*?)\]/m);
-      let jsonString = match ? match[0] : null;
+      let content = res.choices?.[0]?.message?.content || "";
+      console.log('Raw quiz content:', content); // Debug log
+      let jsonString = content.trim();
       let parsed = false;
-      if (jsonString) {
+      if (jsonString.startsWith('[') && jsonString.endsWith(']')) {
         try {
-          // Use jsonrepair to fix malformed JSON
           const repaired = jsonrepair(jsonString);
           quizArr = JSON.parse(repaired);
           parsed = true;
@@ -560,10 +599,26 @@ export function StudySessionPage() {
           quizArr = [];
         }
       } else {
-        console.error('No JSON array found in AI response:', content);
-        quizArr = [];
+        // fallback: try to extract first array with regex
+        const match = content.match(/\[([\s\S]*?)\]/m);
+        jsonString = match ? match[0] : null;
+        if (jsonString) {
+          try {
+            const repaired = jsonrepair(jsonString);
+            quizArr = JSON.parse(repaired);
+            parsed = true;
+            console.log('Parsed quiz array (jsonrepair, fallback):', quizArr);
+          } catch (err) {
+            console.error('Quiz JSON parse error after jsonrepair (fallback):', err, jsonString);
+            quizArr = [];
+          }
+        } else {
+          console.error('No JSON array found in AI response:', content);
+          quizArr = [];
+        }
       }
       setQuiz(Array.isArray(quizArr) ? quizArr : []);
+      resetQuizState();
       setActiveTab("quiz");
       toast({
         title: parsed ? "Quiz Generated" : "Quiz Error",
@@ -583,6 +638,36 @@ export function StudySessionPage() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  // Reset quiz state when a new quiz is generated
+  function resetQuizState() {
+    setUserAnswers([]);
+    setShowQuizResults(false);
+    setQuizScore(null);
+  }
+
+  // Handle answer selection
+  const handleSelectAnswer = (qIndex, oIndex) => {
+    if (showQuizResults) return;
+    setUserAnswers((prev) => {
+      const updated = [...prev];
+      updated[qIndex] = oIndex;
+      return updated;
+    });
+  };
+
+  // Handle checking answers
+  const handleCheckAnswers = () => {
+    let correct = 0;
+    quiz.forEach((q, i) => {
+      const userIdx = userAnswers[i];
+      if (userIdx !== undefined && q.options[userIdx] === q.answer) {
+        correct++;
+      }
+    });
+    setQuizScore({ correct, total: quiz.length });
+    setShowQuizResults(true);
   };
 
   // Render the document content based on document type
@@ -811,7 +896,7 @@ export function StudySessionPage() {
 
         {/* Right Panel - AI Assistant */}
         <div className="col-span-12 md:col-span-3 bg-background rounded-lg shadow-md h-full flex flex-col min-h-0 overflow-hidden">
-          <div className="h-full flex flex-col min-h-0 overflow-hidden">
+          <div className="h-full flex flex-col min-h-0 flex-1 overflow-y-auto">
             <div className="border-b p-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
                 <BrainCircuit className="h-5 w-5 text-primary" />
@@ -819,14 +904,14 @@ export function StudySessionPage() {
               </h2>
             </div>
 
-            <Tabs defaultValue="chat" value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0">
+            <Tabs defaultValue="chat" value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 overflow-y-auto">
               <TabsList className="mx-4 mt-2">
                 <TabsTrigger value="chat">Chat</TabsTrigger>
                 <TabsTrigger value="summary">Summary</TabsTrigger>
                 <TabsTrigger value="quiz">Quiz</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="chat" className="flex-1 flex flex-col p-4 min-h-0">
+              <TabsContent value="chat" className="flex-1 flex flex-col p-4 min-h-0 overflow-auto">
                 <div className="flex-1 overflow-auto mb-4 space-y-4 min-h-0">
                   {messages.map((message, index) => (
                     <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
@@ -843,7 +928,7 @@ export function StudySessionPage() {
                             dangerouslySetInnerHTML={{ __html: marked.parse(message.content || "") }}
                           />
                         ) : (
-                          <p className="text-sm">{message.content}</p>
+                        <p className="text-sm">{message.content}</p>
                         )}
                         <p className="text-xs mt-1 opacity-70">{new Date(message.timestamp).toLocaleTimeString()}</p>
                       </div>
@@ -894,7 +979,7 @@ export function StudySessionPage() {
                 )}
               </TabsContent>
 
-              <TabsContent value="quiz" className="flex-1 p-4 overflow-auto">
+              <TabsContent value="quiz" className="flex-1 p-4 overflow-y-auto min-h-0">
                 {quiz.length > 0 ? (
                   <div className="space-y-6">
                     <h3 className="text-lg font-medium">Quiz: {session.document.title}</h3>
@@ -907,26 +992,66 @@ export function StudySessionPage() {
                             {qIndex + 1}. {question.question}
                           </p>
                           <div className="space-y-2">
-                            {question.options.map((option, oIndex) => (
+                            {question.options.map((option, oIndex) => {
+                              const isSelected = userAnswers[qIndex] === oIndex;
+                              const isCorrect = showQuizResults && option === question.answer;
+                              const isIncorrect =
+                                showQuizResults && isSelected && option !== question.answer;
+                              return (
                               <div key={oIndex} className="flex items-center gap-2">
                                 <input 
                                   type="radio" 
                                   id={`q${qIndex}-o${oIndex}`} 
                                   name={`question-${qIndex}`}
                                   className="text-primary focus:ring-primary"
-                                />
-                                <label htmlFor={`q${qIndex}-o${oIndex}`} className="text-sm text-foreground">
+                                    checked={isSelected}
+                                    disabled={showQuizResults}
+                                    onChange={() => handleSelectAnswer(qIndex, oIndex)}
+                                  />
+                                  <label
+                                    htmlFor={`q${qIndex}-o${oIndex}`}
+                                    className={`text-sm text-foreground ${
+                                      isCorrect
+                                        ? "font-bold text-green-600"
+                                        : isIncorrect
+                                        ? "font-bold text-red-600"
+                                        : ""
+                                    }`}
+                                  >
                                   {option}
+                                    {isCorrect && (
+                                      <span className="ml-2">✔️</span>
+                                    )}
+                                    {isIncorrect && (
+                                      <span className="ml-2">❌</span>
+                                    )}
                                 </label>
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
+                          {showQuizResults && (
+                            <div className="mt-2">
+                              <span className="text-sm font-semibold">
+                                Correct answer: <span className="text-green-600">{question.answer}</span>
+                              </span>
+                            </div>
+                          )}
                         </CardContent>
                       </Card>
                     ))}
-
+                    {/* Show score summary after checking answers */}
+                    {showQuizResults && quizScore && (
+                      <div className="text-center mt-4">
+                        <span className="text-lg font-semibold">
+                          Score: {quizScore.correct} / {quizScore.total}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex justify-end mt-4">
-                      <Button variant="default">Check Answers</Button>
+                      <Button variant="default" onClick={handleCheckAnswers} disabled={showQuizResults}>
+                        Check Answers
+                      </Button>
                     </div>
                   </div>
                 ) : (

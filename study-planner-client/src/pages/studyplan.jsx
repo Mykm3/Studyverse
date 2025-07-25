@@ -74,6 +74,15 @@ export default function StudyPlanPage() {
   const [showFileSelector, setShowFileSelector] = useState(false);
   const [selectedSession, setSelectedSession] = useState(null);
   
+  // State for the Generate Plan modal
+  const [showPlanModal, setShowPlanModal] = useState(false);
+  const [planForm, setPlanForm] = useState({
+    preferredTimes: '',
+    preferredDays: '',
+    sessionLength: '',
+    subjects: '',
+  });
+  
   // Get today's date in YYYY-MM-DD format
   const today = new Date().toISOString().split("T")[0];
   
@@ -209,6 +218,19 @@ export default function StudyPlanPage() {
     navigate(`/study-session?sessionId=${selectedSession._id}&noteId=${file._id}`);
   };
 
+  // Handler for opening the Generate Plan modal
+  const handleOpenPlanModal = () => setShowPlanModal(true);
+  const handleClosePlanModal = () => setShowPlanModal(false);
+  const handlePlanFormChange = (e) => {
+    setPlanForm({ ...planForm, [e.target.name]: e.target.value });
+  };
+  const handlePlanSubmit = (e) => {
+    e.preventDefault();
+    // TODO: Implement plan generation logic here
+    toast({ title: "Plan generation coming soon!", description: JSON.stringify(planForm) });
+    setShowPlanModal(false);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -243,9 +265,12 @@ export default function StudyPlanPage() {
               <Plus className="mr-2 h-4 w-4" />
               New Study Session
             </Button>
-            <Button variant="outline" onClick={createDummySession}>
+            <Button 
+              style={{ backgroundColor: 'black', color: 'white' }}
+              onClick={handleOpenPlanModal}
+            >
               <Plus className="mr-2 h-4 w-4" />
-              Create Test Session
+              Generate Plan
             </Button>
           </div>
         </div>
@@ -795,6 +820,80 @@ export default function StudyPlanPage() {
         subject={selectedSession?.subject}
         onSelectFile={handleFileSelected}
       />
+      {/* Generate Plan Modal */}
+      {showPlanModal && (
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center overflow-auto"
+          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
+          onClick={e => { if (e.target === e.currentTarget) handleClosePlanModal(); }}
+        >
+          <div className="relative w-full max-w-lg px-4 my-6">
+            <div className="modal-content w-full rounded-lg border border-primary/20 shadow-xl backdrop-blur-sm bg-card transition-all duration-300 animate-in fade-in slide-in-from-bottom-5 text-foreground">
+              <form className="p-6" onSubmit={handlePlanSubmit}>
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-2xl font-bold">Generate Study Plan</h2>
+                  <button
+                    type="button"
+                    onClick={handleClosePlanModal}
+                    className="text-muted-foreground hover:text-foreground p-2 rounded-full hover:bg-muted/50 transition-colors"
+                    aria-label="Close"
+                  >
+                    ×
+                  </button>
+                </div>
+                <div className="mb-4">
+                  <label className="block mb-1 font-medium">Preferred Study Times</label>
+                  <input
+                    type="text"
+                    name="preferredTimes"
+                    className="w-full p-2 border rounded"
+                    placeholder="e.g. Evenings, 6-9pm"
+                    value={planForm.preferredTimes}
+                    onChange={handlePlanFormChange}
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block mb-1 font-medium">Preferred Days</label>
+                  <input
+                    type="text"
+                    name="preferredDays"
+                    className="w-full p-2 border rounded"
+                    placeholder="e.g. Mon, Wed, Fri"
+                    value={planForm.preferredDays}
+                    onChange={handlePlanFormChange}
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block mb-1 font-medium">Session Length (minutes)</label>
+                  <input
+                    type="number"
+                    name="sessionLength"
+                    className="w-full p-2 border rounded"
+                    placeholder="e.g. 60"
+                    value={planForm.sessionLength}
+                    onChange={handlePlanFormChange}
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block mb-1 font-medium">Subjects</label>
+                  <input
+                    type="text"
+                    name="subjects"
+                    className="w-full p-2 border rounded"
+                    placeholder="e.g. Math, Physics"
+                    value={planForm.subjects}
+                    onChange={handlePlanFormChange}
+                  />
+                </div>
+                <div className="flex justify-end gap-2 mt-4">
+                  <Button variant="outline" type="button" onClick={handleClosePlanModal}>Cancel</Button>
+                  <Button type="submit" style={{ backgroundColor: 'black', color: 'white' }}>Generate</Button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
