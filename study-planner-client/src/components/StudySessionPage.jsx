@@ -13,6 +13,9 @@ import { Input } from "./ui/Input"
 import axios from "axios"
 import PDFViewerReact from "./PDFViewerReact"
 import DocumentViewer from "./DocumentViewer"
+import { groqChatCompletion } from "@/utils/groq";
+import { jsonrepair } from "jsonrepair";
+import { marked } from "marked";
 
 // API base URL
 const API_BASE_URL = "http://localhost:5000";
@@ -468,121 +471,119 @@ export function StudySessionPage() {
     setIsFullscreen(!isFullscreen)
   }
 
-  const handleSendMessage = (e) => {
-    if (e) e.preventDefault()
+  const handleSendMessage = async (e) => {
+    if (e) e.preventDefault();
+    if (!inputValue.trim()) return;
 
-    if (!inputValue.trim()) return
-
-    // Add user message
     const userMessage = {
       role: "user",
       content: inputValue,
       timestamp: new Date().toISOString(),
-    }
+    };
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue("");
+    setIsGenerating(true);
 
-    setMessages((prev) => [...prev, userMessage])
-    setInputValue("")
-
-    // Simulate AI response
-    setTimeout(() => {
+    try {
+      const chatHistory = [
+        ...messages.map(({ role, content }) => ({ role, content })),
+        { role: "user", content: inputValue },
+      ];
+      const groqRes = await groqChatCompletion(chatHistory);
+      const aiContent = groqRes.choices?.[0]?.message?.content || "[No response from AI]";
       const aiResponse = {
         role: "assistant",
-        content: generateAIResponse(inputValue),
+        content: aiContent,
         timestamp: new Date().toISOString(),
-      }
-      setMessages((prev) => [...prev, aiResponse])
-    }, 1000)
-  }
+      };
+      setMessages((prev) => [...prev, aiResponse]);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `AI error: ${err.message}`,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
-  const generateAIResponse = (query) => {
-    // This is a simple simulation - in a real app, this would call an AI API
-    const responses = [
-      `That's a great question about ${session.subject}! The concept you're asking about relates to the fundamental principles covered in this document.`,
-      `In ${session.document.title}, this is explained through the application of key formulas and techniques. Try looking at the examples.`,
-      `This is a common question in ${session.subject}. The answer involves understanding how different concepts connect together.`,
-      `Based on what you're studying in ${session.document.title}, I'd recommend focusing on the relationship between the variables and how they interact.`,
-      `That's an interesting point! In ${session.subject}, we often approach these problems by breaking them down into smaller steps.`,
-    ]
-
-    return responses[Math.floor(Math.random() * responses.length)]
-  }
-
-  const handleGenerateSummary = () => {
-    setIsGenerating(true)
-
-    // Simulate API call delay
-    setTimeout(() => {
-      setSummary(`
-        # Summary of ${session.document.title}
-        
-        ## Key Concepts
-        
-        This document appears to be about "${session.document.title}" which is part of the ${session.subject} subject.
-        
-        The content includes important information that has been uploaded to your notebook and is now available for review during your study session.
-        
-        ## Why This Matters
-        
-        Having this document available during your study session allows you to reference important materials while taking notes and quizzing yourself on the content.
-      `)
-
-      setIsGenerating(false)
-      setActiveTab("summary")
-
+  const handleGenerateSummary = async () => {
+    setIsGenerating(true);
+    try {
+      const prompt = [
+        { role: "system", content: `You are an expert study assistant. Summarize the following document for a student. Document title: ${session.document.title}. Subject: ${session.subject}.` },
+        { role: "user", content: `Summarize the document in clear, concise bullet points and highlight key concepts.` },
+      ];
+      const groqRes = await groqChatCompletion(prompt);
+      const summaryText = groqRes.choices?.[0]?.message?.content || "[No summary generated]";
+      setSummary(summaryText);
+      setActiveTab("summary");
       toast({
         title: "Summary Generated",
         description: "AI has summarized the document content.",
-      })
-    }, 2000)
-  }
+      });
+    } catch (err) {
+      setSummary(`AI error: ${err.message}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
-  const handleGenerateQuiz = () => {
-    setIsGenerating(true)
-
-    // Simulate API call delay
-    setTimeout(() => {
-      setQuiz([
-        {
-          question: `What is the title of the document you're currently viewing?`,
-          options: [
-            session.document.title,
-            "Integration Techniques",
-            "Study Materials",
-            "Course Notes",
-          ],
-          answer: 0,
-        },
-        {
-          question: "Which of the following best describes the purpose of this document?",
-          options: [
-            "Entertainment",
-            "Study reference material", 
-            "Fiction",
-            "Social media"
-          ],
-          answer: 1,
-        },
-        {
-          question: "Where was this document originally uploaded?",
-          options: [
-            "Social media",
-            "Email",
-            "Notebook page",
-            "External website"
-          ],
-          answer: 2,
-        },
-      ])
-
-      setIsGenerating(false)
-      setActiveTab("quiz")
-
+  const handleGenerateQuiz = async () => {
+    setIsGenerating(true);
+    try {
+      const prompt = [
+        { role: "system", content: `You are an expert study assistant. Create a short quiz (3-5 questions) about the following document for a student. Document title: ${session.document.title}. Subject: ${session.subject}. Format the quiz as JSON: [{question, options, answer}]` },
+        { role: "user", content: `Generate a quiz about the document.` },
+      ];
+      const groqRes = await groqChatCompletion(prompt);
+      console.log('Groq raw response for quiz:', groqRes);
+      let quizArr = [];
+      let content = groqRes.choices?.[0]?.message?.content || "";
+      // Extract the first JSON array from the response
+      const match = content.match(/\[([\s\S]*?)\]/m);
+      let jsonString = match ? match[0] : null;
+      let parsed = false;
+      if (jsonString) {
+        try {
+          // Use jsonrepair to fix malformed JSON
+          const repaired = jsonrepair(jsonString);
+          quizArr = JSON.parse(repaired);
+          parsed = true;
+          console.log('Parsed quiz array (jsonrepair):', quizArr);
+        } catch (err) {
+          console.error('Quiz JSON parse error after jsonrepair:', err, jsonString);
+          quizArr = [];
+        }
+      } else {
+        console.error('No JSON array found in AI response:', content);
+        quizArr = [];
+      }
+      setQuiz(Array.isArray(quizArr) ? quizArr : []);
+      setActiveTab("quiz");
       toast({
-        title: "Quiz Generated",
-        description: "AI has created a quiz based on the document content.",
-      })
-    }, 2000)
-  }
+        title: parsed ? "Quiz Generated" : "Quiz Error",
+        description: parsed ? "AI has generated a quiz for you." : "Failed to parse quiz. Try again or rephrase your document.",
+        variant: parsed ? undefined : "destructive"
+      });
+    } catch (err) {
+      setQuiz([]);
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: `Quiz error: ${err.message}`,
+          timestamp: new Date().toISOString(),
+        },
+      ]);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
 
   // Render the document content based on document type
   const renderDocumentContent = () => {
@@ -831,10 +832,19 @@ export function StudySessionPage() {
                     <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                       <div
                         className={`max-w-[80%] rounded-lg p-3 ${
-                          message.role === "user" ? "bg-primary text-white" : "bg-muted text-foreground dark:bg-slate-700 dark:text-slate-200"
+                          message.role === "user"
+                            ? "bg-primary text-white"
+                            : "bg-white text-black border border-gray-200"
                         }`}
                       >
-                        <p className="text-sm">{message.content}</p>
+                        {message.role === "assistant" ? (
+                          <div
+                            className="prose prose-sm max-w-none"
+                            dangerouslySetInnerHTML={{ __html: marked.parse(message.content || "") }}
+                          />
+                        ) : (
+                          <p className="text-sm">{message.content}</p>
+                        )}
                         <p className="text-xs mt-1 opacity-70">{new Date(message.timestamp).toLocaleTimeString()}</p>
                       </div>
                     </div>
@@ -857,7 +867,7 @@ export function StudySessionPage() {
               <TabsContent value="summary" className="flex-1 p-4 overflow-auto">
                 {summary ? (
                   <div className="prose max-w-none">
-                    <div dangerouslySetInnerHTML={{ __html: summary.replace(/\n/g, "<br />") }} />
+                    <div dangerouslySetInnerHTML={{ __html: marked.parse(summary.replace(/\n/g, "\n")) }} />
                   </div>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center">
