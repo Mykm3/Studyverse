@@ -80,6 +80,8 @@ export function StudySessionPage() {
   const [quizScore, setQuizScore] = useState(null);
   const [extractedText, setExtractedText] = useState("");
   const [extracting, setExtracting] = useState(false);
+  const [documents, setDocuments] = useState([]); // All docs for session
+  const [currentDocumentIndex, setCurrentDocumentIndex] = useState(0);
   
   // We keep iframe loading/error states for compatibility with existing code
   // but the actual PDF viewing is handled by the PDFViewerReact component
@@ -198,43 +200,31 @@ export function StudySessionPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session.document?.fileUrl]);
 
-  // Fetch document for a specific study session
+  // Update fetchSessionDocument to store all documents and set current index
   const fetchSessionDocument = async (sessionId) => {
     setIsLoading(true);
     setDocumentError(null);
     setIframeLoading(true);
     setIframeError(null);
-    
     try {
       const config = getAuthHeaders();
       const response = await axios.get(`${API_BASE_URL}/api/study-sessions/${sessionId}`, config);
-      
       if (response.data) {
         const sessionData = response.data;
-        const documents = sessionData.documents || [];
-        
-        if (documents.length > 0) {
+        const docs = sessionData.documents || [];
+        setDocuments(docs);
+        let docIdx = 0;
+        if (docs.length > 0) {
           // Use the first document (typically most recent)
-          const document = documents[0];
-          
-          console.log("Found document for session:", document.title);
-          
-          // Determine document type and properly formatted URL
+          const document = docs[0];
           const fileType = document.fileUrl?.split('.').pop().toLowerCase() || 'pdf';
           let viewUrl;
-          
-          // Always use our dedicated viewing endpoint for PDFs 
           if (fileType === 'pdf') {
-            // Add token to URL for authentication
             const token = localStorage.getItem('token');
             viewUrl = `${API_BASE_URL}/api/notes/view-pdf/${document.id}?token=${token}`;
-            console.log("Using PDF viewing endpoint with auth:", viewUrl);
           } else {
             viewUrl = document.fileUrl;
-            console.log("Using standard document URL:", viewUrl);
           }
-          
-          // Update session with document data
           setSession(prev => ({
             ...prev,
             title: sessionData.description || document.title,
@@ -248,8 +238,7 @@ export function StudySessionPage() {
               fileUrl: viewUrl
             }
           }));
-
-          // Update messages to include the document title
+          setCurrentDocumentIndex(0);
           setMessages([
             {
               role: "assistant",
@@ -257,18 +246,14 @@ export function StudySessionPage() {
               timestamp: new Date().toISOString(),
             }
           ]);
-
           toast({
             title: "Document Loaded",
             description: `"${document.title}" has been successfully loaded.`,
           });
-          
         } else {
-          // No documents found for this subject
           throw new Error(`No documents found for the subject "${sessionData.subject}". Please upload documents for this subject in the Notebook.`);
         }
       } else {
-        // No session found
         throw new Error("Session not found or has no associated documents.");
       }
     } catch (error) {
@@ -416,6 +401,48 @@ export function StudySessionPage() {
       setIsLoading(false);
       startSession();
     }
+  };
+
+  // Add document switching logic
+  const handleSwitchDocument = (direction) => {
+    if (!documents.length) return;
+    let newIndex = currentDocumentIndex + direction;
+    if (newIndex < 0) newIndex = documents.length - 1;
+    if (newIndex >= documents.length) newIndex = 0;
+    const document = documents[newIndex];
+    const fileType = document.fileUrl?.split('.').pop().toLowerCase() || 'pdf';
+    let viewUrl;
+    if (fileType === 'pdf') {
+      const token = localStorage.getItem('token');
+      viewUrl = `${API_BASE_URL}/api/notes/view-pdf/${document.id}?token=${token}`;
+    } else {
+      viewUrl = document.fileUrl;
+    }
+    setSession(prev => ({
+      ...prev,
+      title: document.title,
+      document: {
+        id: document.id,
+        title: document.title,
+        type: fileType,
+        totalPages: 1,
+        currentPage: 1,
+        fileUrl: viewUrl
+      }
+    }));
+    setCurrentDocumentIndex(newIndex);
+    setExtractedText(""); // Reset extracted text so it will re-extract
+    setMessages([
+      {
+        role: "assistant",
+        content: `Hello! I'm your AI study assistant. How can I help you with "${document.title}"?`,
+        timestamp: new Date().toISOString(),
+      }
+    ]);
+    toast({
+      title: "Document Loaded",
+      description: `"${document.title}" has been successfully loaded.`,
+    });
   };
 
   // Update progress based on active time
@@ -775,7 +802,19 @@ export function StudySessionPage() {
       <header className="flex justify-between items-center mb-6 py-4">
         <div className="flex items-center gap-2">
           <Clock className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold">Study Session</h1>
+          {/* Previous button */}
+          {documents.length > 1 && (
+            <Button variant="ghost" size="icon" onClick={() => handleSwitchDocument(-1)}>
+              <ChevronLeft className="h-6 w-6" />
+            </Button>
+          )}
+          <h1 className="text-2xl font-bold">{session.document.title}</h1>
+          {/* Next button */}
+          {documents.length > 1 && (
+            <Button variant="ghost" size="icon" onClick={() => handleSwitchDocument(1)}>
+              <ChevronRight className="h-6 w-6" />
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-4">
           <Button 
