@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "./ui/Card";
 import { Button } from "./ui/Button";
 import { Input } from "./ui/Input";
@@ -16,6 +16,7 @@ export default function FileUploadTester() {
   const [supabaseFiles, setSupabaseFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const fileInputRef = useRef();
 
   const checkSupabaseConnection = async () => {
     setSupabaseStatus("checking");
@@ -39,8 +40,17 @@ export default function FileUploadTester() {
 
   const handleFileChange = (e) => {
     const selectedFile = e.target.files[0];
+    if (!selectedFile) return;
+
     setFile(selectedFile);
     setUploadResult(null);
+
+    // ✅ Reset the input AFTER React processes state
+    setTimeout(() => {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = null;
+      }
+    }, 0);
   };
 
   const testFileUpload = async () => {
@@ -113,7 +123,7 @@ export default function FileUploadTester() {
           </div>
           <div className="mb-4">
             <Label>File</Label>
-            <Input type="file" onChange={handleFileChange} />
+            <Input type="file" onChange={handleFileChange} ref={fileInputRef} />
             {file && <span className="text-xs text-gray-500 ml-2">{file.name}</span>}
           </div>
           <Button onClick={testFileUpload} disabled={loading} className="w-full">

@@ -3,7 +3,7 @@ import { Bell, Calendar, Clock, Tag } from "lucide-react";
 import { Button } from "./ui/Button";
 import { formatDistanceToNow } from "date-fns";
 import { useNavigate } from "react-router-dom";
-import { getSubjectColor } from "../pages/studyplan";
+import { getSubjectColorMap, generateColorFromString } from "../lib/utils";
 
 // Fallback function in case date-fns fails to load
 function formatDateRelative(date) {
@@ -41,7 +41,7 @@ const getDuration = (startTime, endTime) => {
   }
 };
 
-export default function NotificationDashboard({ sessions = [] }) {
+export default function NotificationDashboard({ sessions = [], subjectColorMap: externalColorMap }) {
   const navigate = useNavigate();
   
   // Sort sessions by date (most recent first)
@@ -53,6 +53,9 @@ export default function NotificationDashboard({ sessions = [] }) {
   // Get today's date without time
   const today = new Date();
   today.setHours(0, 0, 0, 0);
+
+  // Build subject color map if not provided
+  const subjectColorMap = externalColorMap || getSubjectColorMap(sortedSessions.map(s => s.subject));
 
   return (
     <div className="space-y-4">
@@ -72,7 +75,7 @@ export default function NotificationDashboard({ sessions = [] }) {
               const tomorrow = new Date(today);
               tomorrow.setDate(tomorrow.getDate() + 1);
               const isTomorrow = sessionDateCopy.getTime() === tomorrow.getTime();
-              const subjectColor = getSubjectColor(session.subject);
+              const subjectColor = subjectColorMap[session.subject] || generateColorFromString(session.subject);
               const duration = getDuration(session.startTime, session.endTime);
               
               let dateDisplay;

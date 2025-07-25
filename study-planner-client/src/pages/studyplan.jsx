@@ -14,34 +14,48 @@ import { Input } from "../components/ui/Input";
 import { useSubjects } from "../contexts/SubjectContext";
 import FileSelectionModal from "../components/FileSelectionModal";
 
-// Generate a color based on subject name
-export const getSubjectColor = (subject) => {
-  // Generate a consistent color based on subject name with more vibrant colors
-  const subjectColors = {
-    'Mathematics': '#4361ee', // more vibrant blue
-    'Physics': '#3a0ca3',     // rich purple
-    'Chemistry': '#f72585',   // bright pink
-    'Biology': '#7209b7',     // deep purple
-    'Computer Science': '#4cc9f0', // bright blue
-    'Database': '#f94144',    // vibrant red
-    'System Analysis': '#06d6a0' // bright teal
-  };
-  
-  // Return the color if it exists in our mapping
-  if (subjectColors[subject]) {
-    return subjectColors[subject];
-  }
-  
-  // Otherwise generate a vibrant color based on the subject string
+// Fixed color palette for subjects
+const SUBJECT_COLOR_PALETTE = [
+  '#4361ee', // blue
+  '#3a0ca3', // purple
+  '#f72585', // pink
+  '#7209b7', // deep purple
+  '#4cc9f0', // bright blue
+  '#f94144', // red
+  '#06d6a0', // teal
+  '#ffbe0b', // yellow
+  '#8338ec', // violet
+  '#3a86ff', // sky blue
+  '#ff006e', // magenta
+  '#fb5607', // orange
+  '#43aa8b', // green
+  '#b5179e', // dark magenta
+  '#ffb4a2', // peach
+];
+
+// Generate a vibrant color based on a string (fallback)
+function generateColorFromString(str) {
   let hash = 0;
-  for (let i = 0; i < subject?.length || 0; i++) {
-    hash = subject.charCodeAt(i) + ((hash << 5) - hash);
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
   }
-  
-  // Generate more vibrant hues
   const hue = Math.abs(hash % 360);
-  return `hsl(${hue}, 85%, 50%)`; // Increased saturation for more vivid colors
-};
+  return `hsl(${hue}, 85%, 50%)`;
+}
+
+// Assign unique colors to subjects
+function getSubjectColorMap(subjects) {
+  const colorMap = {};
+  const uniqueSubjects = Array.from(new Set(subjects.map(s => typeof s === 'string' ? s : s.name)));
+  uniqueSubjects.forEach((subject, idx) => {
+    if (idx < SUBJECT_COLOR_PALETTE.length) {
+      colorMap[subject] = SUBJECT_COLOR_PALETTE[idx];
+    } else {
+      colorMap[subject] = generateColorFromString(subject);
+    }
+  });
+  return colorMap;
+}
 
 export default function StudyPlanPage() {
   const [sessions, setSessions] = useState([]);
@@ -203,6 +217,13 @@ export default function StudyPlanPage() {
     );
   }
 
+  // Build a list of all subject names from sessions and subjects context
+  const allSubjectNames = Array.from(new Set([
+    ...sessions.map(s => s.subject),
+    ...(Array.isArray(subjects) ? subjects.map(s => s.name) : [])
+  ].filter(Boolean)));
+  const subjectColorMap = getSubjectColorMap(allSubjectNames);
+
   return (
     <div
       className="h-screen"
@@ -306,7 +327,7 @@ export default function StudyPlanPage() {
                       console.error(`Error parsing dates for session ${session._id}:`, error);
                       return null;
                     }
-                    const color = getSubjectColor(session.subject);
+                    const color = subjectColorMap[session.subject] || generateColorFromString(session.subject);
                     // Determine status
                     let status = 'upcoming';
                     if (end < now) {
@@ -372,7 +393,7 @@ export default function StudyPlanPage() {
                     </select>
                   </div>
                 </div>
-                <NotificationDashboard sessions={getFilteredSessions()} />
+                <NotificationDashboard sessions={getFilteredSessions()} subjectColorMap={subjectColorMap} />
               </div>
             </div>
           </TabsContent>
@@ -605,7 +626,7 @@ export default function StudyPlanPage() {
                               <div className="flex items-center">
                                 <div 
                                   className="h-8 w-8 rounded-full mr-3 flex items-center justify-center text-white"
-                                  style={{ backgroundColor: getSubjectColor(subject) }}
+                                  style={{ backgroundColor: subjectColorMap[subject] || generateColorFromString(subject) }}
                                 >
                                   {subject.charAt(0)}
                                 </div>

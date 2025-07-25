@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { Calendar, Clock, Save, Trash, X, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { useToast } from "@/components/ui/use-toast";
@@ -27,13 +27,15 @@ const EditSession = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const { subjects } = useSubjects();
 
+  // Safely memoize initial session if passed via location
+  const initialSession = useMemo(() => location.state?.session, []);
+
   // Fetch the session data on component mount
   useEffect(() => {
     const fetchSession = async () => {
       try {
-        // If session data is passed via location state, use it
-        if (location.state?.session) {
-          const { subject, startTime, endTime, description } = location.state.session;
+        if (initialSession) {
+          const { subject, startTime, endTime, description } = initialSession;
           setFormData({
             subject,
             startTime: formatDateTimeForInput(startTime),
@@ -79,7 +81,7 @@ const EditSession = () => {
     if (sessionId) {
       fetchSession();
     }
-  }, [sessionId, navigate, toast, location.state]);
+  }, [sessionId, navigate, toast, location.state, initialSession]);
 
   // Helper function to format datetime for input
   const formatDateTimeForInput = (dateString) => {
@@ -184,11 +186,8 @@ const EditSession = () => {
     }));
   };
 
-  const handleSelectChange = (value) => {
-    setFormData(prev => ({
-      ...prev,
-      subject: value
-    }));
+  const handleSelectChange = (e) => {
+    setFormData(prev => ({ ...prev, subject: e.target.value }));
   };
 
   if (isLoading) {
@@ -242,7 +241,7 @@ const EditSession = () => {
                 id="subject"
                 name="subject"
                 value={formData.subject}
-                onChange={(e) => handleChange(e)}
+                onChange={handleSelectChange}
                 required
               >
                 {subjects.length > 0 ? (
