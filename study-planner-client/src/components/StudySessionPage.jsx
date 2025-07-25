@@ -693,6 +693,15 @@ export function StudySessionPage() {
         </div>
         <div className="flex items-center gap-4">
           <Button 
+            variant="outline"
+            size="sm"
+            className="flex gap-2"
+            onClick={() => navigate('/study-plan')}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            <span>Back to Study Plan</span>
+          </Button>
+          <Button 
             variant="default" 
             size="sm" 
             className="bg-primary hover:bg-primary/90 text-white px-6 py-2 font-semibold rounded-md shadow"
