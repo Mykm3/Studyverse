@@ -106,7 +106,7 @@ router.get('/:sessionId', auth, async (req, res) => {
 // Create a new study session
 router.post('/', auth, async (req, res) => {
   try {
-    const { subject, startTime, endTime, description, documentId } = req.body;
+    const { subject, startTime, endTime, description, documentId, isAIGenerated } = req.body;
     
     // Validate required fields
     if (!subject || !startTime || !endTime) {
@@ -158,7 +158,8 @@ router.post('/', auth, async (req, res) => {
       endTime,
       description,
       status: 'scheduled',
-      documentId: selectedDocument ? selectedDocument._id : null
+      documentId: selectedDocument ? selectedDocument._id : null,
+      isAIGenerated: isAIGenerated || false
     };
 
     studyPlan.sessions.push(newSession);
@@ -307,30 +308,49 @@ router.put('/:sessionId', auth, async (req, res) => {
 router.delete('/:sessionId', auth, async (req, res) => {
   try {
     const sessionId = req.params.sessionId;
+    console.log('Attempting to delete session:', sessionId);
+    console.log('User ID:', req.user._id);
     
     // Find study plan
     let studyPlan = await StudyPlan.findOne({ userId: req.user._id });
     if (!studyPlan) {
+      console.log('Study plan not found for user:', req.user._id);
       return res.status(404).json({ message: 'Study plan not found' });
     }
+
+    console.log('Found study plan with sessions count:', studyPlan.sessions.length);
+    console.log('Session IDs in study plan:', studyPlan.sessions.map(s => s._id.toString()));
 
     // Find the session to delete
     const sessionIndex = studyPlan.sessions.findIndex(
       session => session._id.toString() === sessionId
     );
 
+    console.log('Session index found:', sessionIndex);
+
     if (sessionIndex === -1) {
+      console.log('Session not found with ID:', sessionId);
       return res.status(404).json({ message: 'Session not found' });
     }
+
+    // Get session info before deletion for logging
+    const sessionToDelete = studyPlan.sessions[sessionIndex];
+    console.log('Deleting session:', {
+      id: sessionToDelete._id,
+      subject: sessionToDelete.subject,
+      startTime: sessionToDelete.startTime
+    });
 
     // Remove session
     studyPlan.sessions.splice(sessionIndex, 1);
     await studyPlan.save();
     
+    console.log('Session deleted successfully. Remaining sessions:', studyPlan.sessions.length);
     res.json({ message: 'Session deleted successfully' });
   } catch (error) {
     console.error('Error deleting study session:', error);
-    res.status(500).json({ message: 'Server error' });
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ message: 'Server error', details: error.message });
   }
 });
 

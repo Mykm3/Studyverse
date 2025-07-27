@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "../components/ui/Button"
-import { CalendarIcon, Plus, ChevronLeft, ChevronRight, PieChart, ListChecks, Play, BarChart, Clock, Search, Filter, Book } from "lucide-react"
+import { CalendarIcon, Plus, ChevronLeft, ChevronRight, PieChart, ListChecks, Play, BarChart, Clock, Search, Filter, Book, Sparkles } from "lucide-react"
 import StudyCalendar from "../components/StudyCalendar"
 import UpcomingSessions from "../components/UpcomingSessions"
 import Calendar from "../components/Calendar";
@@ -13,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card"
 import { Input } from "../components/ui/Input";
 import { useSubjects } from "../contexts/SubjectContext";
 import FileSelectionModal from "../components/FileSelectionModal";
+import { PlanModal } from "../components/PlanModal";
+import api from "../utils/api";
 
 // Fixed color palette for subjects
 const SUBJECT_COLOR_PALETTE = [
@@ -76,6 +78,7 @@ export default function StudyPlanPage() {
   
   // State for the Generate Plan modal
   const [showPlanModal, setShowPlanModal] = useState(false);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [planForm, setPlanForm] = useState({
     preferredTimes: '',
     preferredDays: '',
@@ -232,6 +235,259 @@ export default function StudyPlanPage() {
     setShowPlanModal(false);
   };
 
+  // AI-powered study plan generation
+  const handleGenerateAIPlan = async (formData) => {
+    setIsGeneratingPlan(true);
+    try {
+      console.log('Generating AI study plan with:', formData);
+      
+      // First, clear existing AI-generated sessions
+      console.log('Clearing existing AI-generated sessions...');
+      const sessionsResponse = await fetch(
+        `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/study-sessions`,
+        {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem("token")}`,
+          },
+        }
+      );
+      
+      if (!sessionsResponse.ok) {
+        console.error('Failed to fetch current sessions:', sessionsResponse.status, sessionsResponse.statusText);
+        throw new Error(`Failed to fetch current sessions: ${sessionsResponse.status}`);
+      }
+      
+      const currentSessions = await sessionsResponse.json();
+      
+      if (!Array.isArray(currentSessions)) {
+        console.error('Current sessions is not an array:', currentSessions);
+        throw new Error('Invalid response format: expected array of sessions');
+      }
+      
+      // Filter out all sessions from current day onwards (both AI-generated and manual)
+      const today = new Date();
+      today.setHours(0, 0, 0, 0); // Start of today
+      
+      console.log('Current sessions to check:', currentSessions.map(s => ({
+        id: s._id,
+        subject: s.subject,
+        startTime: s.startTime,
+        isAIGenerated: s.isAIGenerated
+      })));
+      
+      const sessionsToDelete = currentSessions.filter(session => {
+        if (!session.startTime) {
+          console.log(`Session ${session._id}: no startTime, skipping`);
+          return false;
+        }
+        
+        const sessionDate = new Date(session.startTime);
+        const isFutureOrToday = sessionDate >= today;
+        
+        console.log(`Session ${session._id}: ${session.subject} on ${sessionDate.toISOString().split('T')[0]} - ${isFutureOrToday ? 'FUTURE/TODAY' : 'PAST'}`);
+        
+        return isFutureOrToday;
+      });
+      
+      // Delete all future sessions from backend
+      if (sessionsToDelete.length > 0) {
+        console.log(`Attempting to delete ${sessionsToDelete.length} future sessions (from today onwards)`);
+        
+        toast({
+          title: "Clearing Future Sessions",
+          description: `Removing ${sessionsToDelete.length} sessions from today onwards...`,
+        });
+        
+        // Try to delete sessions one by one to avoid complete failure
+        let deletedCount = 0;
+        let failedCount = 0;
+        
+        for (const session of sessionsToDelete) {
+          try {
+            console.log(`Attempting to delete session: ${session._id} (${session.subject})`);
+            const response = await fetch(
+              `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/study-sessions/${session._id}`,
+              {
+                method: 'DELETE',
+                headers: {
+                  Authorization: `Bearer ${localStorage.getItem("token")}`,
+                },
+              }
+            );
+            
+            if (response.ok) {
+              deletedCount++;
+              console.log(`✅ Successfully deleted session ${session._id}`);
+            } else {
+              failedCount++;
+              const errorText = await response.text();
+              console.error(`❌ Failed to delete session ${session._id}:`, response.status, errorText);
+            }
+          } catch (error) {
+            failedCount++;
+            console.error(`❌ Error deleting session ${session._id}:`, error);
+          }
+        }
+        
+        console.log(`Deletion summary: ${deletedCount} deleted, ${failedCount} failed`);
+        
+        if (deletedCount > 0) {
+          if (deletedCount === sessionsToDelete.length) {
+            toast({
+              title: "Cleanup Complete",
+              description: `Successfully cleared all ${deletedCount} future sessions.`,
+              variant: "default"
+            });
+          } else {
+            toast({
+              title: "Partial Cleanup",
+              description: `Cleared ${deletedCount} of ${sessionsToDelete.length} future sessions. ${failedCount} failed.`,
+              variant: "default"
+            });
+          }
+        } else {
+          console.log('❌ No sessions were deleted - all deletions failed');
+          toast({
+            title: "Cleanup Failed",
+            description: `Couldn't delete any future sessions (${failedCount} failed). Continuing with new plan generation.`,
+            variant: "destructive"
+          });
+        }
+        
+        // Force refresh sessions after deletion
+        console.log('🔄 Refreshing sessions after deletion...');
+        await fetchSessions();
+        console.log('✅ Sessions refreshed after deletion');
+        
+        // Check what sessions remain after deletion
+        const remainingSessions = await fetch(
+          `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/study-sessions`,
+          {
+            headers: {
+              Authorization: `Bearer ${localStorage.getItem("token")}`,
+            },
+          }
+        ).then(res => res.json());
+        
+        console.log('📊 Remaining sessions after deletion:', remainingSessions.length);
+        console.log('📊 Remaining future sessions:', remainingSessions.filter(s => {
+          if (!s.startTime) return false;
+          const sessionDate = new Date(s.startTime);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          return sessionDate >= today;
+        }).length);
+        
+        // If no sessions were deleted, show a warning but continue
+        if (deletedCount === 0) {
+          console.warn('⚠️ No future sessions were deleted - this might cause duplicate sessions');
+        }
+      } else {
+        console.log('✅ No future sessions to clear');
+      }
+      
+      const response = await api.post('/api/groq/studyplan', formData);
+      console.log('API response:', response);
+      
+      if (!response) {
+        throw new Error('No response data received from server');
+      }
+      
+      if (response.success && response.plan) {
+        const plan = response.plan;
+        
+        // Convert AI plan to calendar events
+        const newSessions = [];
+        let sessionId = 1;
+        
+        plan.weeks.forEach(week => {
+          week.sessions.forEach(session => {
+            // Clean up description to remove "Introduction to" prefix
+            let cleanDescription = session.description || `${session.subject} study session`;
+            if (cleanDescription.toLowerCase().startsWith('introduction to ')) {
+              cleanDescription = cleanDescription.replace(/^introduction to /i, '');
+            }
+            
+            newSessions.push({
+              _id: `ai-generated-${sessionId++}`,
+              subject: session.subject,
+              startTime: session.startTime,
+              endTime: session.endTime,
+              description: cleanDescription,
+              status: 'scheduled',
+              progress: 0,
+              learningStyle: session.learningStyle || 'balanced',
+              isAIGenerated: true
+            });
+          });
+        });
+
+        // Save the new sessions to the backend
+        try {
+          const savePromises = newSessions.map(session => 
+            api.post('/api/study-sessions', {
+              subject: session.subject,
+              startTime: session.startTime,
+              endTime: session.endTime,
+              description: session.description,
+              isAIGenerated: true
+            })
+          );
+          
+          await Promise.all(savePromises);
+          
+          // Refresh sessions from backend
+          await fetchSessions();
+          
+          toast({
+            title: "Study Plan Generated!",
+            description: `Successfully created ${newSessions.length} study sessions for ${formData.subjects.length} subjects.`,
+          });
+        } catch (saveError) {
+          console.error('Failed to save sessions:', saveError);
+          // Still show the sessions locally even if save failed
+          setSessions(prevSessions => [...prevSessions, ...newSessions]);
+          
+          toast({
+            title: "Plan Generated (Local Only)",
+            description: `Created ${newSessions.length} sessions locally. Some may not be saved to the server.`,
+            variant: "destructive"
+          });
+        }
+        
+        setShowPlanModal(false);
+      } else {
+        throw new Error('Invalid response from AI service');
+      }
+    } catch (error) {
+      console.error('Failed to generate AI study plan:', error);
+      console.error('Error details:', {
+        message: error.message,
+        response: error.response,
+        responseData: error.response?.data,
+        status: error.response?.status
+      });
+      
+      let errorMessage = "Failed to generate study plan. Please try again.";
+      
+      if (error.response?.data?.error) {
+        errorMessage = error.response.data.error;
+      } else if (error.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error.message) {
+        errorMessage = error.message;
+      }
+      
+      toast({
+        title: "Generation Failed",
+        description: errorMessage,
+        variant: "destructive"
+      });
+    } finally {
+      setIsGeneratingPlan(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -267,11 +523,12 @@ export default function StudyPlanPage() {
               New Study Session
             </Button>
             <Button 
-              style={{ backgroundColor: 'black', color: 'white' }}
+              variant="gradient"
               onClick={handleOpenPlanModal}
+              className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
             >
-              <Plus className="mr-2 h-4 w-4" />
-              Generate Plan
+              <Sparkles className="mr-2 h-4 w-4" />
+              Generate AI Plan
             </Button>
           </div>
         </div>
@@ -831,80 +1088,13 @@ export default function StudyPlanPage() {
         subject={selectedSession?.subject}
         onSelectFile={handleFileSelected}
       />
-      {/* Generate Plan Modal */}
-      {showPlanModal && (
-        <div
-          className="fixed inset-0 z-[1000] flex items-center justify-center overflow-auto"
-          style={{ background: "rgba(0,0,0,0.7)", backdropFilter: "blur(4px)" }}
-          onClick={e => { if (e.target === e.currentTarget) handleClosePlanModal(); }}
-        >
-          <div className="relative w-full max-w-lg px-4 my-6">
-            <div className="modal-content w-full rounded-lg border border-primary/20 shadow-xl backdrop-blur-sm bg-card transition-all duration-300 animate-in fade-in slide-in-from-bottom-5 text-foreground">
-              <form className="p-6" onSubmit={handlePlanSubmit}>
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-2xl font-bold">Generate Study Plan</h2>
-                  <button
-                    type="button"
-                    onClick={handleClosePlanModal}
-                    className="text-muted-foreground hover:text-foreground p-2 rounded-full hover:bg-muted/50 transition-colors"
-                    aria-label="Close"
-                  >
-                    ×
-                  </button>
-                </div>
-                <div className="mb-4">
-                  <label className="block mb-1 font-medium">Preferred Study Times</label>
-                  <input
-                    type="text"
-                    name="preferredTimes"
-                    className="w-full p-2 border rounded"
-                    placeholder="e.g. Evenings, 6-9pm"
-                    value={planForm.preferredTimes}
-                    onChange={handlePlanFormChange}
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block mb-1 font-medium">Preferred Days</label>
-                  <input
-                    type="text"
-                    name="preferredDays"
-                    className="w-full p-2 border rounded"
-                    placeholder="e.g. Mon, Wed, Fri"
-                    value={planForm.preferredDays}
-                    onChange={handlePlanFormChange}
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block mb-1 font-medium">Session Length (minutes)</label>
-                  <input
-                    type="number"
-                    name="sessionLength"
-                    className="w-full p-2 border rounded"
-                    placeholder="e.g. 60"
-                    value={planForm.sessionLength}
-                    onChange={handlePlanFormChange}
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block mb-1 font-medium">Subjects</label>
-                  <input
-                    type="text"
-                    name="subjects"
-                    className="w-full p-2 border rounded"
-                    placeholder="e.g. Math, Physics"
-                    value={planForm.subjects}
-                    onChange={handlePlanFormChange}
-                  />
-                </div>
-                <div className="flex justify-end gap-2 mt-4">
-                  <Button variant="outline" type="button" onClick={handleClosePlanModal}>Cancel</Button>
-                  <Button type="submit" style={{ backgroundColor: 'black', color: 'white' }}>Generate</Button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* AI-Powered Plan Modal */}
+      <PlanModal 
+        open={showPlanModal}
+        onClose={handleClosePlanModal}
+        onSubmit={handleGenerateAIPlan}
+        isLoading={isGeneratingPlan}
+      />
     </div>
   )
 }

@@ -27,6 +27,10 @@ const studySessionSchema = new mongoose.Schema({
     default: 0,
     min: 0,
     max: 100
+  },
+  isAIGenerated: {
+    type: Boolean,
+    default: false
   }
 });
 
