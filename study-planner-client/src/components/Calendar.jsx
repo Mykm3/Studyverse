@@ -124,7 +124,7 @@ const Calendar = ({ events, onDateSelect }) => {
       <div className={`fc-event-main-content p-2 overflow-hidden cursor-pointer ${eventClass}`} style={{fontWeight: 'bold'}}>
         <div className="font-bold flex items-center">
           {icon}
-          <span className={status === 'completed' ? 'line-through' : ''}>{eventInfo.event.title}</span>
+          <span>{eventInfo.event.title}</span>
           {tag}
         </div>
         {selectedView !== 'dayGridMonth' && (
@@ -333,11 +333,9 @@ const Calendar = ({ events, onDateSelect }) => {
             }
 
             .calendar-event-completed {
-              background: rgba(34,197,94,0.15) !important;
+              background: rgba(34,197,94,0.08) !important;
               color: #22c55e !important;
-              text-decoration: line-through;
-              opacity: 0.9 !important;
-              border: 2px solid #22c55e !important;
+              opacity: 1 !important;
             }
             .calendar-event-missed {
               background: #ef4444 !important;
