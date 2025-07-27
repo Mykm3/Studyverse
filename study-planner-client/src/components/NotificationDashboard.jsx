@@ -87,19 +87,22 @@ export default function NotificationDashboard({ sessions = [], subjectColorMap: 
                 dateDisplay = formatDateRelative(sessionDate);
               }
 
-              // Status logic
+              // Status logic - prioritize progress over time
               const now = new Date();
               const sessionEnd = new Date(session.endTime);
               let status = 'Upcoming';
               let statusColor = 'bg-blue-100 text-blue-700';
-              if (sessionEnd < now) {
-                if (session.progress === 100) {
-                  status = 'Completed';
-                  statusColor = 'bg-green-100 text-green-700';
-                } else {
-                  status = 'Missed';
-                  statusColor = 'bg-red-100 text-red-700';
-                }
+              
+              // Check if session is completed (progress = 100 OR status = 'completed')
+              const isCompleted = session.progress === 100 || session.status === 'completed';
+              
+              if (isCompleted) {
+                status = 'Completed';
+                statusColor = 'bg-green-100 text-green-700';
+              } else if (sessionEnd < now) {
+                // Only show as missed if it's past due AND not completed
+                status = 'Missed';
+                statusColor = 'bg-red-100 text-red-700';
               }
 
               return (

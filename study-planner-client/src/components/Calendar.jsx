@@ -333,25 +333,26 @@ const Calendar = ({ events, onDateSelect }) => {
             }
 
             .calendar-event-completed {
-              background: rgba(34,197,94,0.12) !important;
+              background: rgba(34,197,94,0.15) !important;
               color: #22c55e !important;
               text-decoration: line-through;
-              opacity: 0.7 !important;
+              opacity: 0.9 !important;
+              border: 2px solid #22c55e !important;
             }
             .calendar-event-missed {
-              background: rgba(239,68,68,0.12) !important;
-              color: #ef4444 !important;
-              opacity: 0.8 !important;
+              background: #ef4444 !important;
+              color: #ffffff !important;
+              opacity: 1 !important;
             }
             .calendar-event-missed-tag {
-              background: #ef4444;
-              color: #fff;
+              background: #ffffff;
+              color: #ef4444;
               border-radius: 8px;
               font-size: 0.7em;
               padding: 0 6px;
               margin-left: 4px;
               font-weight: 600;
-              opacity: 0.85;
+              opacity: 0.9;
             }
           `}</style>
           

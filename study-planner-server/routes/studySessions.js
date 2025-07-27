@@ -191,16 +191,30 @@ router.post('/', auth, async (req, res) => {
 // Update a study session
 router.put('/:sessionId', auth, async (req, res) => {
   try {
-    const { subject, startTime, endTime, description, documentId } = req.body;
+    const { subject, startTime, endTime, description, documentId, progress } = req.body;
     const sessionId = req.params.sessionId;
     
-    // Validate required fields
-    if (!subject || !startTime || !endTime) {
+    console.log('Update session request body:', req.body);
+    console.log('Extracted fields:', { subject, startTime, endTime, description, documentId, progress });
+    
+    // Validate required fields (only if updating fields other than progress)
+    const isOnlyUpdatingProgress = progress !== undefined && 
+      subject === undefined && 
+      startTime === undefined && 
+      endTime === undefined && 
+      description === undefined && 
+      documentId === undefined;
+    
+    console.log('Is only updating progress:', isOnlyUpdatingProgress);
+    console.log('Validation check:', !isOnlyUpdatingProgress && (!subject || !startTime || !endTime));
+    
+    if (!isOnlyUpdatingProgress && (!subject || !startTime || !endTime)) {
+      console.log('Validation failed - missing required fields');
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    // Validate dates
-    if (new Date(endTime) <= new Date(startTime)) {
+    // Validate dates (only if updating times)
+    if (startTime && endTime && new Date(endTime) <= new Date(startTime)) {
       return res.status(400).json({ message: 'End time must be after start time' });
     }
 
@@ -223,6 +237,13 @@ router.put('/:sessionId', auth, async (req, res) => {
     if (!studyPlan) {
       return res.status(404).json({ message: 'Study plan not found' });
     }
+    
+    console.log('Current study plan sessions:', studyPlan.sessions.map(s => ({
+      id: s._id,
+      subject: s.subject,
+      status: s.status,
+      progress: s.progress
+    })));
 
     // Find the session to update
     const sessionIndex = studyPlan.sessions.findIndex(
@@ -233,23 +254,49 @@ router.put('/:sessionId', auth, async (req, res) => {
       return res.status(404).json({ message: 'Session not found' });
     }
 
-    // Update session
-    studyPlan.sessions[sessionIndex] = {
-      ...studyPlan.sessions[sessionIndex],
-      subject,
-      startTime,
-      endTime,
-      description,
-      documentId: selectedDocument ? selectedDocument._id : studyPlan.sessions[sessionIndex].documentId
-    };
+    // Get the current session
+    const currentSession = studyPlan.sessions[sessionIndex];
+    
+    // Update only the specific fields that are provided
+    if (subject) currentSession.subject = subject;
+    if (startTime) currentSession.startTime = startTime;
+    if (endTime) currentSession.endTime = endTime;
+    if (description !== undefined) currentSession.description = description;
+    if (progress !== undefined) {
+      currentSession.progress = progress;
+      // Also update status for backward compatibility
+      if (progress === 100) {
+        currentSession.status = 'completed';
+      } else if (progress === 0) {
+        currentSession.status = 'scheduled';
+      }
+    }
+    if (selectedDocument) currentSession.documentId = selectedDocument._id;
+
+    // Ensure all required fields are present
+    console.log('Updated session before save:', {
+      subject: currentSession.subject,
+      startTime: currentSession.startTime,
+      endTime: currentSession.endTime,
+      status: currentSession.status,
+      progress: currentSession.progress
+    });
     
     // Update subjects list if new subject
-    if (!studyPlan.subjects.includes(subject)) {
+    if (subject && !studyPlan.subjects.includes(subject)) {
       studyPlan.subjects.push(subject);
     }
 
     await studyPlan.save();
-    res.json(studyPlan.sessions[sessionIndex]);
+    
+    console.log('Session updated successfully:', {
+      id: currentSession._id,
+      subject: currentSession.subject,
+      status: currentSession.status,
+      progress: currentSession.progress
+    });
+    
+    res.json(currentSession);
   } catch (error) {
     console.error('Error updating study session:', error);
     res.status(500).json({ message: 'Server error' });

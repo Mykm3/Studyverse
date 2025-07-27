@@ -21,6 +21,12 @@ const studySessionSchema = new mongoose.Schema({
     type: String,
     enum: ['scheduled', 'completed', 'cancelled'],
     default: 'scheduled'
+  },
+  progress: {
+    type: Number,
+    default: 0,
+    min: 0,
+    max: 100
   }
 });
 

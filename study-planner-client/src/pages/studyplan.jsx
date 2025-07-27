@@ -129,6 +129,7 @@ export default function StudyPlanPage() {
       }
 
       const data = await response.json();
+      console.log('Fetched sessions data:', data);
       setSessions(data);
     } catch (error) {
       console.error("Error fetching sessions:", error);
@@ -353,22 +354,32 @@ export default function StudyPlanPage() {
                       return null;
                     }
                     const color = subjectColorMap[session.subject] || generateColorFromString(session.subject);
-                    // Determine status
+                    // Determine status - prioritize progress over time
                     let status = 'upcoming';
-                    if (end < now) {
-                      if (session.progress === 100) {
-                        status = 'completed';
-                      } else {
-                        status = 'missed';
-                      }
+                    let backgroundColor = color;
+                    let borderColor = color;
+                    
+                    // Check if session is completed (progress = 100 OR status = 'completed')
+                    const isCompleted = session.progress === 100 || session.status === 'completed';
+                    
+                    if (isCompleted) {
+                      status = 'completed';
+                      // Keep original subject color for completed sessions
+                      backgroundColor = color;
+                      borderColor = color;
+                    } else if (end < now) {
+                      // Only show as missed if it's past due AND not completed
+                      status = 'missed';
+                      backgroundColor = '#ef4444'; // Red background for missed sessions
+                      borderColor = '#ef4444';
                     }
                     return {
                       id: session._id,
                       title: session.subject,
                       start: startStr,
                       end: endStr,
-                      backgroundColor: color,
-                      borderColor: color,
+                      backgroundColor: backgroundColor,
+                      borderColor: borderColor,
                       textColor: '#ffffff',
                       description: session.description || '',
                       allDay: false,

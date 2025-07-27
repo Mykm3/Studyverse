@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Brain, ArrowLeft, Maximize2, Minimize2, BookOpen, HelpCircle, BrainCircuit, Sparkles, Clock, Download, Book, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Brain, ArrowLeft, Maximize2, Minimize2, BookOpen, HelpCircle, BrainCircuit, Sparkles, Clock, Download, Book, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react'
 import { Button } from "./ui/Button"
 import { useToast } from "./ui/use-toast"
 import { SessionTimer } from "./SessionTimer"
@@ -10,6 +10,7 @@ import { SessionProgress } from "./SessionProgress"
 import { Card, CardContent } from "./ui/Card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/Tabs"
 import { Input } from "./ui/Input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/Dialog"
 import axios from "axios"
 import PDFViewerReact from "./PDFViewerReact"
 import DocumentViewer from "./DocumentViewer"
@@ -82,6 +83,7 @@ export function StudySessionPage() {
   const [extracting, setExtracting] = useState(false);
   const [documents, setDocuments] = useState([]); // All docs for session
   const [currentDocumentIndex, setCurrentDocumentIndex] = useState(0);
+  const [showEarlyFinishModal, setShowEarlyFinishModal] = useState(false);
   
   // We keep iframe loading/error states for compatibility with existing code
   // but the actual PDF viewing is handled by the PDFViewerReact component
@@ -211,6 +213,7 @@ export function StudySessionPage() {
       const response = await axios.get(`${API_BASE_URL}/api/study-sessions/${sessionId}`, config);
       if (response.data) {
         const sessionData = response.data;
+        console.log('Fetched session data:', sessionData);
         const docs = sessionData.documents || [];
         setDocuments(docs);
         let docIdx = 0;
@@ -227,6 +230,7 @@ export function StudySessionPage() {
           }
           setSession(prev => ({
             ...prev,
+            id: sessionData._id || sessionData.id,
             title: sessionData.description || document.title,
             subject: sessionData.subject || "Study Session",
             document: {
@@ -499,6 +503,79 @@ export function StudySessionPage() {
       title: "Session Complete!",
       description: "Congratulations! You've completed your study session.",
     })
+  }
+
+  // Enhanced finish session logic with early completion options
+  const handleFinishSession = () => {
+    const now = new Date();
+    const sessionEndTime = new Date(session.startTime);
+    sessionEndTime.setMinutes(sessionEndTime.getMinutes() + session.duration);
+    
+    const isEarly = now < sessionEndTime;
+    const timeLeft = Math.max(0, sessionEndTime.getTime() - now.getTime());
+    const minutesLeft = Math.ceil(timeLeft / (1000 * 60));
+
+    if (isEarly && minutesLeft > 5) {
+      // Show early finish modal if more than 5 minutes left
+      setShowEarlyFinishModal(true);
+    } else {
+      // Complete session immediately
+      markSessionAsComplete();
+    }
+  }
+
+  const markSessionAsComplete = async () => {
+    try {
+      const sessionId = session.id || session._id;
+      if (sessionId) {
+        console.log('Marking session as complete:', sessionId);
+        console.log('Current session data:', session);
+        
+        const requestBody = { progress: 100 };
+        console.log('Sending request body:', requestBody);
+        
+        const response = await fetch(`${API_BASE_URL}/api/study-sessions/${sessionId}`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          },
+          body: JSON.stringify(requestBody)
+        });
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
+        }
+        
+        const updatedSession = await response.json();
+        console.log('Session updated successfully:', updatedSession);
+      }
+      
+      toast({
+        title: "Session Completed!",
+        description: "Your study session has been marked as complete.",
+      });
+      
+      // Navigate back to Study Plan
+      navigate('/study-plan');
+    } catch (err) {
+      console.error('Failed to mark session complete:', err);
+      toast({
+        title: "Error",
+        description: "Failed to complete session. Please try again.",
+        variant: "destructive"
+      });
+    }
+  }
+
+  const handleTryQuiz = () => {
+    setShowEarlyFinishModal(false);
+    setActiveTab("quiz");
+    // Auto-generate quiz if no quiz exists
+    if (quiz.length === 0 && extractedText) {
+      handleGenerateQuiz();
+    }
   }
 
   const handlePageChange = (newPage) => {
@@ -830,30 +907,7 @@ export function StudySessionPage() {
             variant="default" 
             size="sm" 
             className="bg-primary hover:bg-primary/90 text-white px-6 py-2 font-semibold rounded-md shadow"
-            onClick={async () => {
-              const confirmed = window.confirm('Are you sure you want to finish this session? This will mark it as complete and return you to the Study Plan.');
-              if (!confirmed) return;
-              // Mark session as complete (set progress to 100)
-              setSession(prev => ({ ...prev, progress: 100 }));
-              setIsSessionComplete(true);
-              // Optionally, call API to persist completion
-              try {
-                if (session.id) {
-                  await fetch(`${API_BASE_URL}/api/study-sessions/${session.id}`, {
-                    method: 'PUT',
-                    headers: {
-                      'Content-Type': 'application/json',
-                      'Authorization': `Bearer ${localStorage.getItem('token')}`
-                    },
-                    body: JSON.stringify({ ...session, progress: 100 })
-                  });
-                }
-              } catch (err) {
-                console.error('Failed to mark session complete:', err);
-              }
-              // Navigate back to Study Plan
-              navigate('/study-plan');
-            }}
+            onClick={handleFinishSession}
           >
             Finish Session
           </Button>
@@ -1142,6 +1196,48 @@ export function StudySessionPage() {
           </div>
         </div>
       </div>
+
+      {/* Early Finish Modal */}
+      <Dialog open={showEarlyFinishModal} onOpenChange={setShowEarlyFinishModal}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-amber-500" />
+              End Session Early?
+            </DialogTitle>
+            <DialogDescription className="text-left">
+              You still have time left in this session. Would you like to end it now or try a quick quiz to test your knowledge?
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="flex flex-col gap-3 mt-4">
+            <Button
+              variant="outline"
+              onClick={handleTryQuiz}
+              className="justify-start"
+            >
+              <HelpCircle className="h-4 w-4 mr-2" />
+              Try a Quick Quiz
+            </Button>
+            <Button
+              onClick={() => {
+                markSessionAsComplete();
+                setShowEarlyFinishModal(false);
+              }}
+              className="bg-primary hover:bg-primary/90"
+            >
+              <CheckCircle className="h-4 w-4 mr-2" />
+              Yes, End Session
+            </Button>
+            <Button
+              variant="ghost"
+              onClick={() => setShowEarlyFinishModal(false)}
+            >
+              Continue Studying
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 } 
