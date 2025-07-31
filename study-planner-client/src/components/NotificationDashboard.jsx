@@ -89,7 +89,7 @@ export default function NotificationDashboard({ sessions = [], subjectColorMap: 
         <CardHeader className="pb-2">
           <CardTitle className="text-lg font-bold flex items-center">
             <Bell className="h-5 w-5 text-primary mr-2" />
-            Today's Sessions
+            Upcoming Sessions
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">

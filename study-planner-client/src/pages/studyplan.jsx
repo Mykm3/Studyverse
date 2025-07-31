@@ -76,6 +76,7 @@ export default function StudyPlanPage() {
   // State for the Generate Plan modal
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [isCreatingImmediateSession, setIsCreatingImmediateSession] = useState(false);
   const [planForm, setPlanForm] = useState({
     preferredTimes: '',
     preferredDays: '',
@@ -760,9 +761,10 @@ export default function StudyPlanPage() {
                       )}
                     </div>
                     
-                    {/* Create Quick Session */}
+                    {/* Create Immediate Session */}
                     <div className="bg-muted/50 rounded-lg p-4">
-                      <h3 className="text-lg font-medium mb-2">Create Quick Session</h3>
+                      <h3 className="text-lg font-medium mb-2">Create Immediate Session</h3>
+                      <p className="text-sm text-muted-foreground mb-3">Create a study session that starts now and add it to today's sessions list.</p>
                       <div className="bg-card rounded-lg p-4 border border-border">
                         <div className="grid grid-cols-2 gap-4 mb-4">
                           <div>
@@ -771,16 +773,12 @@ export default function StudyPlanPage() {
                               className="w-full p-2 rounded-md border border-border bg-background"
                               id="quickSessionSubject"
                             >
-                              {sessions.reduce((subjects, session) => {
-                                if (!subjects.includes(session.subject)) {
-                                  subjects.push(session.subject);
-                                }
-                                return subjects;
-                              }, []).map((subject) => (
-                                <option key={subject} value={subject}>
-                                  {subject}
+                              <option value="">Select a subject</option>
+                              {Array.isArray(subjects) ? subjects.map((subject) => (
+                                <option key={subject.name} value={subject.name}>
+                                  {subject.name}
                                 </option>
-                              ))}
+                              )) : []}
                             </select>
                           </div>
                           <div>
@@ -799,58 +797,82 @@ export default function StudyPlanPage() {
                         </div>
                         <Button 
                           className="w-full bg-primary hover:bg-primary/90"
-                          onClick={() => {
+                          disabled={isCreatingImmediateSession}
+                          onClick={async () => {
                             const subject = document.getElementById("quickSessionSubject").value;
                             const durationMinutes = parseInt(document.getElementById("quickSessionDuration").value);
                             
-                            // Create start and end times
-                            const startTime = new Date();
-                            const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
-                            
-                            // Create session payload
-                            const sessionData = {
-                              subject,
-                              startTime: startTime.toISOString(),
-                              endTime: endTime.toISOString(),
-                              description: `Quick ${durationMinutes}-minute session`
-                            };
-                            
-                            // Create and start the session
-                            fetch(
-                              `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/study-sessions`,
-                              {
-                                method: 'POST',
-                                headers: {
-                                  'Content-Type': 'application/json',
-                                  Authorization: `Bearer ${localStorage.getItem("token")}`,
-                                },
-                                body: JSON.stringify(sessionData)
-                              }
-                            )
-                            .then(response => {
-                              if (!response.ok) throw new Error("Failed to create session");
-                              return response.json();
-                            })
-                            .then(data => {
-                              toast({
-                                title: "Session Created",
-                                description: "Your quick study session has been created"
-                              });
-                              
-                              // Navigate directly to study session
-                              navigate(`/study-session?sessionId=${data._id}`);
-                            })
-                            .catch(error => {
-                              console.error("Error creating quick session:", error);
+                            if (!subject) {
                               toast({
                                 title: "Error",
-                                description: "Failed to create quick session",
+                                description: "Please select a subject",
                                 variant: "destructive"
                               });
-                            });
+                              return;
+                            }
+                            
+                            setIsCreatingImmediateSession(true);
+                            
+                            try {
+                              // Create start and end times
+                              const startTime = new Date();
+                              const endTime = new Date(startTime.getTime() + durationMinutes * 60000);
+                              
+                              // Create session payload
+                              const sessionData = {
+                                subject,
+                                startTime: startTime.toISOString(),
+                                endTime: endTime.toISOString(),
+                                description: `Immediate ${durationMinutes}-minute session`
+                              };
+                              
+                              // Create the session
+                              const response = await fetch(
+                                `${import.meta.env.VITE_API_URL || "http://localhost:5000"}/api/study-sessions`,
+                                {
+                                  method: 'POST',
+                                  headers: {
+                                    'Content-Type': 'application/json',
+                                    Authorization: `Bearer ${localStorage.getItem("token")}`,
+                                  },
+                                  body: JSON.stringify(sessionData)
+                                }
+                              );
+                              
+                              if (!response.ok) {
+                                throw new Error("Failed to create session");
+                              }
+                              
+                              const data = await response.json();
+                              
+                              toast({
+                                title: "Session Created",
+                                description: "Your immediate study session has been added to today's sessions"
+                              });
+                              
+                              // Refresh the sessions list to show the new session
+                              await fetchSessions();
+                              
+                            } catch (error) {
+                              console.error("Error creating immediate session:", error);
+                              toast({
+                                title: "Error",
+                                description: "Failed to create immediate session",
+                                variant: "destructive"
+                              });
+                            } finally {
+                              setIsCreatingImmediateSession(false);
+                            }
                           }}
                         >
-                          Start Immediate Session
+                          {isCreatingImmediateSession ? (
+                            <>
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                              Creating...
+                            </>
+                          ) : (
+                            "Create Immediate Session"
+                          )}
                         </Button>
                       </div>
                     </div>
@@ -915,34 +937,27 @@ export default function StudyPlanPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {sessions.reduce((subjects, session) => {
-                        if (!subjects.includes(session.subject)) {
-                          subjects.push(session.subject);
-                        }
-                        return subjects;
-                      }, []).slice(0, 5).map((subject, index) => {
-                        // Find the subject in the subjects context to get the actual file count
-                        const subjectInfo = subjects.find(s => s.name === subject);
-                        const fileCount = subjectInfo ? subjectInfo.documentsCount || 0 : 0;
-                        
-                        return (
+                      {Array.isArray(subjects) ? subjects
+                        .filter(subject => (subject.documentsCount || 0) > 0)
+                        .slice(0, 5)
+                        .map((subject) => (
                           <div 
-                            key={subject} 
+                            key={subject.name} 
                             className="p-3 rounded-lg border border-border bg-card/50 hover:border-primary/30 hover:bg-card transition-colors cursor-pointer"
-                            onClick={() => navigate(`/notebook?subject=${encodeURIComponent(subject)}`)}
+                            onClick={() => navigate(`/notebook?subject=${encodeURIComponent(subject.name)}`)}
                           >
                             <div className="flex items-center justify-between">
                               <div className="flex items-center">
                                 <div 
                                   className="h-8 w-8 rounded-full mr-3 flex items-center justify-center text-white"
-                                  style={{ backgroundColor: subjectColorMap[subject] || generateColorFromString(subject) }}
+                                  style={{ backgroundColor: subjectColorMap[subject.name] || generateColorFromString(subject.name) }}
                                 >
-                                  {subject.charAt(0)}
+                                  {subject.name.charAt(0)}
                                 </div>
                                 <div>
-                                  <h3 className="font-medium">{subject}</h3>
+                                  <h3 className="font-medium">{subject.name}</h3>
                                   <p className="text-xs text-muted-foreground">
-                                    {fileCount} {fileCount === 1 ? 'file' : 'files'}
+                                    {subject.documentsCount} {subject.documentsCount === 1 ? 'file' : 'files'}
                                   </p>
                                 </div>
                               </div>
@@ -955,8 +970,10 @@ export default function StudyPlanPage() {
                               </Button>
                             </div>
                           </div>
-                        );
-                      })}
+                        )) : []}
+                      {Array.isArray(subjects) && subjects.filter(subject => (subject.documentsCount || 0) > 0).length === 0 && (
+                        <p className="text-muted-foreground text-center py-4">No subjects with files found.</p>
+                      )}
                     </div>
                     <Button variant="outline" className="w-full mt-4" onClick={() => navigate('/notebook')}>
                       View All Materials
