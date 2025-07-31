@@ -319,7 +319,9 @@ DISTRIBUTION STRATEGY:
 - DISTRIBUTION RULE: Use ALL ${normalizedPreferredDays.length} selected days evenly
 - ANTI-CLUSTERING: If you have ${totalSessionsPerWeek} sessions and ${normalizedPreferredDays.length} days, distribute them evenly. Don't put 3 sessions on Monday and skip Tuesday.
 - EXAMPLE: ${totalSessionsPerWeek} sessions ÷ ${normalizedPreferredDays.length} days = ${(totalSessionsPerWeek / normalizedPreferredDays.length).toFixed(1)} sessions per day average
-- CRITICAL: You MUST use at least ${Math.ceil(normalizedPreferredDays.length * 0.7)} out of ${normalizedPreferredDays.length} selected days
+- CRITICAL: You MUST use at least ${Math.ceil(normalizedPreferredDays.length * 0.5)} out of ${normalizedPreferredDays.length} selected days for ${totalSessionsPerWeek} sessions
+- LOW SESSION RULE: If you have ${totalSessionsPerWeek} sessions and ${normalizedPreferredDays.length} days, spread them across at least ${Math.ceil(totalSessionsPerWeek / 2)} different days
+- WEEKDAY PRIORITIZATION: When all 7 days are selected but sessions are limited (≤8 sessions/week), prioritize weekdays (Monday-Friday) over weekends for better study focus
 
 ADDITIONAL NOTES:
 ${optionalNotes || "None"}
@@ -358,6 +360,7 @@ WEEKLY SCHEDULING RULES:
 - NEVER skip a selected day unless you've reached the maximum sessions per day
 - DISTRIBUTE SESSIONS EVENLY: If you have 12 sessions and 6 days, put 2 sessions per day
 - AVOID CLUSTERING: Don't put 3-4 sessions on Monday and skip Tuesday
+- WEEKDAY PRIORITIZATION: When all 7 days are selected but sessions are limited (≤8 sessions/week), prioritize weekdays (Monday-Friday) over weekends
 
 WARNING: If user selected Monday, Wednesday, Friday, you MUST schedule on Monday, Wednesday, Friday ONLY. Do NOT schedule on Tuesday, Thursday, Saturday.
 
@@ -400,8 +403,24 @@ DISTRIBUTION EXAMPLES:
   * GOOD: 2-3 sessions per day, spread across all 7 days
   * BAD: 4-5 sessions on Monday, Wednesday, Friday, skip Tuesday, Thursday, Saturday, Sunday
 
+- If user has 4 sessions per week and selected all 7 days (Mon-Sun):
+  * GOOD: 1 session on Monday, 1 on Tuesday, 1 on Wednesday, 1 on Thursday (prioritize weekdays for few sessions)
+  * BAD: 2 sessions on Monday, 2 on Wednesday, skip Tuesday, Thursday, Saturday, Sunday
+
+- If user has 6 sessions per week and selected all 7 days (Mon-Sun):
+  * GOOD: 1 session on Monday, 1 on Tuesday, 1 on Wednesday, 1 on Thursday, 1 on Friday, 1 on Saturday (spread across 6 days)
+  * BAD: 3 sessions on Monday, 3 on Wednesday, skip Tuesday, Thursday, Friday, Saturday, Sunday
+
+- If user has 8 sessions per week and selected all 7 days (Mon-Sun):
+  * GOOD: 1-2 sessions on Monday, Tuesday, Wednesday, Thursday, Friday (prioritize weekdays for moderate sessions)
+  * BAD: 4 sessions on Monday, 4 on Wednesday, skip Tuesday, Thursday, Friday, Saturday, Sunday
+
+WEEKDAY PRIORITIZATION RULE: When all 7 days are selected but sessions are limited (≤8 sessions/week), prioritize weekdays (Monday-Friday) over weekends. This allows for more focused study during the work week.
+
 REMEMBER: Use ALL selected days evenly. Don't skip days unless you've reached the maximum sessions per day limit.
-MINIMUM DAYS: You must use at least ${Math.ceil(normalizedPreferredDays.length * 0.7)} out of ${normalizedPreferredDays.length} selected days.
+DISTRIBUTION RULE: With ${totalSessionsPerWeek} sessions and ${normalizedPreferredDays.length} days, aim to use at least ${Math.ceil(totalSessionsPerWeek / 2)} different days.
+MINIMUM DAYS: You must use at least ${Math.ceil(normalizedPreferredDays.length * 0.5)} out of ${normalizedPreferredDays.length} selected days for ${totalSessionsPerWeek} sessions.
+WEEKDAY PRIORITIZATION: When all 7 days are selected but sessions are limited (≤8 sessions/week), prioritize weekdays (Monday-Friday) over weekends for better study focus.
 
 ✅ Return only the schedule in plain, structured JSON format. Do not add explanations, markdown, or comments.`;
 
@@ -555,10 +574,36 @@ MINIMUM DAYS: You must use at least ${Math.ceil(normalizedPreferredDays.length *
       
       // Check for day skipping: if user selected many days but AI only used significantly fewer days
       if (normalizedPreferredDays.length >= 6) {
-        const minDaysRequired = Math.ceil(normalizedPreferredDays.length * 0.7); // Allow some flexibility
+        // More lenient threshold for fewer sessions
+        const totalSessionsInWeek = Object.values(sessionsByDay).reduce((sum, count) => sum + count, 0);
+        let minDaysRequired;
+        
+        // Check if all 7 days are selected (including weekends)
+        const hasAllDays = normalizedPreferredDays.length === 7;
+        const hasWeekends = normalizedPreferredDays.includes('Saturday') || normalizedPreferredDays.includes('Sunday');
+        
+        if (totalSessionsInWeek <= 4) {
+          // For 4 or fewer sessions, prioritize weekdays if all days are selected
+          if (hasAllDays && hasWeekends) {
+            minDaysRequired = 4; // Allow focusing on weekdays (Mon-Fri) for very few sessions
+          } else {
+            minDaysRequired = Math.ceil(normalizedPreferredDays.length * 0.5); // Only require 50% of days
+          }
+        } else if (totalSessionsInWeek <= 8) {
+          // For 5-8 sessions, be more flexible with weekday prioritization
+          if (hasAllDays && hasWeekends) {
+            minDaysRequired = 5; // Allow focusing on weekdays (Mon-Fri) for moderate sessions
+          } else {
+            minDaysRequired = Math.ceil(normalizedPreferredDays.length * 0.6);
+          }
+        } else {
+          // For 9+ sessions, require more distribution
+          minDaysRequired = Math.ceil(normalizedPreferredDays.length * 0.7);
+        }
+        
         if (daysWithSessions < minDaysRequired) {
           skippedDays = true;
-          console.log(`AI skipped days: used only ${daysWithSessions} days out of ${normalizedPreferredDays.length} selected days (minimum required: ${minDaysRequired})`);
+          console.log(`AI skipped days: used only ${daysWithSessions} days out of ${normalizedPreferredDays.length} selected days (minimum required: ${minDaysRequired} for ${totalSessionsInWeek} sessions)`);
         }
       }
     }
@@ -588,7 +633,7 @@ MINIMUM DAYS: You must use at least ${Math.ceil(normalizedPreferredDays.length *
     if (skippedDays) {
       return res.status(500).json({
         error: "AI skipped selected days",
-        message: `AI only used ${Math.floor(normalizedPreferredDays.length * 0.7)} days instead of all ${normalizedPreferredDays.length} selected days. Sessions should be distributed across all selected days. Please try again.`
+        message: `AI didn't distribute sessions evenly across all ${normalizedPreferredDays.length} selected days. With ${totalSessionsPerWeek} sessions per week, please try to spread them across more days. Please try again.`
       });
     }
 
