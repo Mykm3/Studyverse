@@ -14,7 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import axios from "axios"
 import PDFViewerReact from "./PDFViewerReact"
 import DocumentViewer from "./DocumentViewer"
-import { groqChatCompletion } from "@/utils/groq";
+
 import { jsonrepair } from "jsonrepair";
 import { marked } from "marked";
 import api from "@/utils/api";
@@ -639,7 +639,7 @@ export function StudySessionPage() {
         ...messages.map(({ role, content }) => ({ role, content })),
         { role: "user", content: inputValue },
       ].filter(Boolean);
-      const res = await api.post("/api/groq/chat", { messages: chatHistory });
+              const res = await api.post("/api/groq/chat", { messages: chatHistory });
       const aiContent = res.choices?.[0]?.message?.content || "[No response from AI]";
       const aiResponse = {
         role: "assistant",
@@ -666,7 +666,7 @@ export function StudySessionPage() {
     setIsGenerating(true);
     try {
       if (!extractedText) throw new Error("No extracted text available for summary.");
-      const res = await api.post("/api/groq/summary", { text: extractedText });
+              const res = await api.post("/api/groq/summary", { text: extractedText });
       const summaryText = res.choices?.[0]?.message?.content || "[No summary generated]";
       setSummary(summaryText);
       setActiveTab("summary");
@@ -686,7 +686,7 @@ export function StudySessionPage() {
     setIsGenerating(true);
     try {
       if (!extractedText) throw new Error("No extracted text available for quiz.");
-      const res = await api.post("/api/groq/quiz", { text: extractedText });
+              const res = await api.post("/api/groq/quiz", { text: extractedText });
       let quizArr = [];
       let content = res.choices?.[0]?.message?.content || "";
       console.log('Raw quiz content:', content); // Debug log

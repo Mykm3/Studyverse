@@ -9,6 +9,8 @@ const studySessionRoutes = require('./routes/studySessions');
 const notesRoutes = require('./routes/notes');
 const diagnosticsRoutes = require('./routes/diagnostics');
 const groqRoutes = require('./routes/groq');
+const aiRoutes = require('./routes/ai');
+const geminiStudyPlanRoutes = require('./routes/gemini-studyplan');
 
 // Debug logging
 console.log('Server configuration:');
@@ -157,6 +159,12 @@ app.use('/api/diagnostics', diagnosticsRoutes);
 
 console.log('Mounting groq routes at /api/groq');
 app.use('/api/groq', groqRoutes);
+
+console.log('Mounting Gemini study plan routes at /api/gemini-studyplan');
+app.use('/api/gemini-studyplan', geminiStudyPlanRoutes);
+
+console.log('Mounting AI routes at /api/ai (DISABLED)');
+// app.use('/api/ai', aiRoutes); // Disabled - using Groq instead
 
 // Protected route example
 app.get("/api/protected", (req, res) => {

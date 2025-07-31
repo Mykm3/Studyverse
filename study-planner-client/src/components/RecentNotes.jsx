@@ -1,12 +1,17 @@
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card"
 import { Button } from "../components/ui/Button"
 import { Plus, FileText, ChevronRight } from "lucide-react"
-import { Link } from "react-router-dom"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 import { useState, useEffect } from "react"
 
 export default function RecentNotes({ animate = false }) {
   const [notes, setNotes] = useState([]);
   const [appeared, setAppeared] = useState({});
+  const location = useLocation();
+  const navigate = useNavigate();
+  
+  // Determine if we're on the dashboard page
+  const isDashboard = location.pathname === '/dashboard';
 
   useEffect(() => {
     // Fetch the last 3 recently uploaded notes
@@ -46,6 +51,28 @@ export default function RecentNotes({ animate = false }) {
     }
   }, [animate, notes]);
 
+  // Handle note click based on current page
+  const handleNoteClick = (noteId) => {
+    if (isDashboard) {
+      // On dashboard, navigate to notebook page
+      navigate('/notebook');
+    } else {
+      // On other pages (like notebook), keep existing behavior
+      navigate(`/notebook/${noteId}`);
+    }
+  };
+
+  // Handle upload note button click based on current page
+  const handleUploadNote = () => {
+    if (isDashboard) {
+      // On dashboard, navigate to notebook page
+      navigate('/notebook');
+    } else {
+      // On other pages (like notebook), keep existing behavior
+      navigate('/notebook');
+    }
+  };
+
   return (
     <Card className="h-full">
       <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -53,24 +80,22 @@ export default function RecentNotes({ animate = false }) {
           <FileText className="h-5 w-5 mr-2 text-primary" />
           Recent Notes
         </CardTitle>
-        <Link to="/notebook">
-          <Button size="sm" variant="ghost">
-            <Plus className="h-4 w-4" />
-          </Button>
-        </Link>
+        <Button size="sm" variant="ghost" onClick={handleUploadNote}>
+          <Plus className="h-4 w-4" />
+        </Button>
       </CardHeader>
       <CardContent>
         {notes.length === 0 ? (
           <div className="text-center text-muted-foreground py-8">
             <p className="mb-2">No recent notes found.</p>
-            <Button as={Link} to="/notebook" variant="outline" size="sm">Upload Note</Button>
+            <Button variant="outline" size="sm" onClick={handleUploadNote}>Upload Note</Button>
           </div>
         ) : (
           notes.map((note, idx) => (
-            <Link
+            <div
               key={note._id || note.id || idx}
-              to={`/notebook/${note._id || note.id}`}
-              className={`block border rounded-lg p-4 hover:border-primary/50 transition-colors mb-4 ${animate && !appeared[note._id || note.id] ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}
+              onClick={() => handleNoteClick(note._id || note.id)}
+              className={`block border rounded-lg p-4 hover:border-primary/50 transition-colors mb-4 cursor-pointer ${animate && !appeared[note._id || note.id] ? 'opacity-0 translate-y-4' : 'opacity-100 translate-y-0'}`}
               style={{ transitionDelay: `${idx * 200}ms` }}
             >
               <div className="flex justify-between">
@@ -92,7 +117,7 @@ export default function RecentNotes({ animate = false }) {
                   </span>
                 )}
               </div>
-            </Link>
+            </div>
           ))
         )}
       </CardContent>

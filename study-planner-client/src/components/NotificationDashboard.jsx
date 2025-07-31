@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card";
 import { Bell, Calendar, Clock, Tag } from "lucide-react";
 import { Button } from "./ui/Button";
 import { formatDistanceToNow } from "date-fns";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { getSubjectColorMap, generateColorFromString } from "../lib/utils";
 
 // Fallback function in case date-fns fails to load
@@ -43,6 +43,10 @@ const getDuration = (startTime, endTime) => {
 
 export default function NotificationDashboard({ sessions = [], subjectColorMap: externalColorMap }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Determine if we're on the dashboard page
+  const isDashboard = location.pathname === '/dashboard';
   
   // Sort sessions by date (most recent first)
   const sortedSessions = [...sessions]
@@ -56,6 +60,28 @@ export default function NotificationDashboard({ sessions = [], subjectColorMap: 
 
   // Build subject color map if not provided
   const subjectColorMap = externalColorMap || getSubjectColorMap(sortedSessions.map(s => s.subject));
+
+  // Handle session click based on current page
+  const handleSessionClick = (session) => {
+    if (isDashboard) {
+      // On dashboard, navigate to study-plan page
+      navigate('/study-plan');
+    } else {
+      // On other pages (like study-plan), keep existing behavior
+      navigate(`/study-session?sessionId=${session._id}`);
+    }
+  };
+
+  // Handle create session button click based on current page
+  const handleCreateSession = () => {
+    if (isDashboard) {
+      // On dashboard, navigate to study-plan page
+      navigate('/study-plan');
+    } else {
+      // On other pages (like study-plan), keep existing behavior
+      navigate("/add-session");
+    }
+  };
 
   return (
     <div className="space-y-4">
@@ -109,7 +135,7 @@ export default function NotificationDashboard({ sessions = [], subjectColorMap: 
                 <div 
                   key={index} 
                   className="p-3 rounded-lg border border-border/50 bg-card/50 hover:border-primary/30 hover:shadow-sm transition-all duration-300 relative overflow-hidden cursor-pointer"
-                  onClick={() => navigate(`/study-session?sessionId=${session._id}`)}
+                  onClick={() => handleSessionClick(session)}
                 >
                   <div 
                     className="absolute top-0 left-0 w-1 h-full" 
@@ -117,7 +143,7 @@ export default function NotificationDashboard({ sessions = [], subjectColorMap: 
                   ></div>
                   <div className="pl-2">
                     <h3 className="font-medium text-sm truncate pr-4">
-                      {session.description || `${session.subject} Session`}
+                      {`${session.subject} Session`}
                     </h3>
                     <div className="flex items-center gap-2 mt-1">
                       <div 
@@ -160,7 +186,7 @@ export default function NotificationDashboard({ sessions = [], subjectColorMap: 
           ) : (
             <div className="text-center py-4">
               <p className="text-muted-foreground text-sm mb-3">No upcoming sessions</p>
-              <Button variant="outline" className="text-xs" size="sm" onClick={() => navigate("/add-session")}>
+              <Button variant="outline" className="text-xs" size="sm" onClick={handleCreateSession}>
                 Create Session
               </Button>
             </div>

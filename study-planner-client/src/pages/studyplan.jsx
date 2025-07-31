@@ -133,6 +133,7 @@ export default function StudyPlanPage() {
 
       const data = await response.json();
       console.log('Fetched sessions data:', data);
+      console.log('Setting sessions state with', data.length, 'sessions');
       setSessions(data);
     } catch (error) {
       console.error("Error fetching sessions:", error);
@@ -149,6 +150,11 @@ export default function StudyPlanPage() {
   useEffect(() => {
     fetchSessions();
   }, []);
+
+  // Debug effect to monitor sessions state changes
+  useEffect(() => {
+    console.log('Sessions state changed:', sessions.length, 'sessions');
+  }, [sessions]);
 
   const createDummySession = async () => {
     try {
@@ -402,18 +408,12 @@ export default function StudyPlanPage() {
         
         plan.weeks.forEach(week => {
           week.sessions.forEach(session => {
-            // Clean up description to remove "Introduction to" prefix
-            let cleanDescription = session.description || `${session.subject} study session`;
-            if (cleanDescription.toLowerCase().startsWith('introduction to ')) {
-              cleanDescription = cleanDescription.replace(/^introduction to /i, '');
-            }
-            
             newSessions.push({
               _id: `ai-generated-${sessionId++}`,
               subject: session.subject,
               startTime: session.startTime,
               endTime: session.endTime,
-              description: cleanDescription,
+              description: `${session.subject} Session`, // Simple fallback description
               status: 'scheduled',
               progress: 0,
               learningStyle: session.learningStyle || 'balanced',
@@ -424,19 +424,37 @@ export default function StudyPlanPage() {
 
         // Save the new sessions to the backend
         try {
+          console.log('Saving', newSessions.length, 'sessions to backend...');
           const savePromises = newSessions.map(session => 
             api.post('/api/study-sessions', {
               subject: session.subject,
               startTime: session.startTime,
               endTime: session.endTime,
-              description: session.description,
+              description: `${session.subject} Session`,
               isAIGenerated: true
             })
           );
           
-          await Promise.all(savePromises);
+          const saveResults = await Promise.all(savePromises);
+          console.log('Save results:', saveResults);
           
-          // Refresh sessions from backend
+          // Update sessions state directly with the saved sessions
+          const savedSessions = saveResults.map(result => ({
+            _id: result._id || result.id,
+            subject: result.subject,
+            startTime: result.startTime,
+            endTime: result.endTime,
+            description: result.description,
+            status: result.status || 'scheduled',
+            progress: result.progress || 0,
+            isAIGenerated: result.isAIGenerated || true
+          }));
+          
+          console.log('Updating sessions state with', savedSessions.length, 'new sessions');
+          setSessions(prevSessions => [...prevSessions, ...savedSessions]);
+          
+          // Also refresh from backend to ensure consistency
+          console.log('Refreshing sessions from backend...');
           await fetchSessions();
           
           toast({
@@ -476,6 +494,15 @@ export default function StudyPlanPage() {
         errorMessage = error.response.data.message;
       } else if (error.message) {
         errorMessage = error.message;
+      }
+
+      // Add helpful fallback suggestions
+      if (errorMessage.includes("unrecognized subject names") || errorMessage.includes("parse")) {
+        errorMessage += "\n\n💡 Try reducing the number of subjects or increasing your weekly hours.";
+      } else if (errorMessage.includes("past")) {
+        errorMessage += "\n\n💡 The AI created sessions in the past. Please try again.";
+      } else if (errorMessage.includes("too large") || errorMessage.includes("truncated")) {
+        errorMessage += "\n\n💡 Try reducing the number of weeks or subjects.";
       }
       
       toast({
@@ -653,6 +680,7 @@ export default function StudyPlanPage() {
                   }).filter(Boolean);
                   
                   console.log('Final calendar events:', calendarEvents);
+                  console.log('Calendar events count:', calendarEvents.length);
                   
                   return (
                     <Calendar 
