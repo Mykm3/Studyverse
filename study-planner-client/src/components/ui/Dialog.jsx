@@ -1,70 +1,91 @@
-import React from 'react';
-import { X } from 'lucide-react';
-import { Button } from './Button';
+import React, { useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
-// Dialog Context
-const DialogContext = React.createContext();
+const Dialog = ({ open, onOpenChange, children }) => {
+  // Lock body scroll when modal is open
+  useEffect(() => {
+    if (open) {
+      // Store original body style
+      const originalStyle = window.getComputedStyle(document.body).overflow;
+      const originalHeight = document.body.style.height;
+      
+      // Lock scroll
+      document.body.style.overflow = 'hidden';
+      document.body.style.height = '100vh';
+      document.documentElement.style.overflow = 'hidden';
+      
+      // Cleanup function to restore scroll
+      return () => {
+        document.body.style.overflow = originalStyle;
+        document.body.style.height = originalHeight;
+        document.documentElement.style.overflow = '';
+      };
+    }
+  }, [open]);
 
-export function Dialog({ open, onOpenChange, children }) {
   if (!open) return null;
 
-  return (
-    <DialogContext.Provider value={{ onOpenChange }}>
-      <div className="fixed inset-0 z-50 flex items-center justify-center">
-        <div className="fixed inset-0 bg-black/50" onClick={() => onOpenChange(false)} />
-        <div className="relative bg-white rounded-lg shadow-lg max-w-md w-full mx-4">
-          {children}
-        </div>
+  // Render modal at document.body level to avoid parent container issues
+  return createPortal(
+    <div 
+      className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center cursor-pointer p-4"
+      style={{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        width: '100vw',
+        height: '100vh',
+        minHeight: '100vh',
+        zIndex: 9999
+      }}
+      onClick={() => onOpenChange(false)}
+    >
+      {/* Modal content - prevent click through */}
+      <div 
+        className="relative bg-white rounded-lg shadow-lg w-full cursor-default"
+        style={{ maxWidth: '500px' }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {children}
       </div>
-    </DialogContext.Provider>
+    </div>,
+    document.body
   );
-}
+};
 
-export function DialogContent({ children, className = "" }) {
+const DialogContent = ({ children, className = "" }) => {
   return (
-    <div className={`p-6 ${className}`}>
+    <div className={`bg-white rounded-lg shadow-lg p-6 max-h-[90vh] overflow-y-auto ${className}`}>
       {children}
     </div>
   );
-}
+};
 
-export function DialogHeader({ children }) {
+const DialogHeader = ({ children, className = "" }) => {
   return (
-    <div className="mb-4">
+    <div className={`mb-4 ${className}`}>
       {children}
     </div>
   );
-}
+};
 
-export function DialogTitle({ children, className = "" }) {
+const DialogTitle = ({ children, className = "" }) => {
   return (
-    <h2 className={`text-lg font-semibold ${className}`}>
+    <h2 className={`text-lg font-semibold text-gray-900 ${className}`}>
       {children}
     </h2>
   );
-}
+};
 
-export function DialogDescription({ children, className = "" }) {
+const DialogDescription = ({ children, className = "" }) => {
   return (
-    <p className={`text-sm text-gray-600 ${className}`}>
+    <p className={`text-sm text-gray-600 mt-1 ${className}`}>
       {children}
     </p>
   );
-}
+};
 
-export function DialogClose({ children, ...props }) {
-  const { onOpenChange } = React.useContext(DialogContext);
-  
-  return (
-    <Button
-      variant="ghost"
-      size="sm"
-      className="absolute top-4 right-4 h-6 w-6 p-0"
-      onClick={() => onOpenChange(false)}
-      {...props}
-    >
-      <X className="h-4 w-4" />
-      <span className="sr-only">Close</span>
-    </Button>
-  );
-} 
+export { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription };
+export default Dialog;

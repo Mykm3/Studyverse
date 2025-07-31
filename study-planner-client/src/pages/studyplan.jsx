@@ -12,7 +12,6 @@ import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { useSubjects } from "../contexts/SubjectContext";
-import FileSelectionModal from "../components/FileSelectionModal";
 import { PlanModal } from "../components/PlanModal";
 import api from "../utils/api";
 
@@ -72,9 +71,7 @@ export default function StudyPlanPage() {
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [sessionTypeFilter, setSessionTypeFilter] = useState("upcoming");
   
-  // State for file selection modal
-  const [showFileSelector, setShowFileSelector] = useState(false);
-  const [selectedSession, setSelectedSession] = useState(null);
+
   
   // State for the Generate Plan modal
   const [showPlanModal, setShowPlanModal] = useState(false);
@@ -214,18 +211,10 @@ export default function StudyPlanPage() {
     navigate(`/add-session?startTime=${encodeURIComponent(startTime)}`);
   };
 
-  // Add a new function to handle launching a session with file selection
+  // Add a new function to handle launching a session directly
   const handleLaunchSession = (session) => {
-    setSelectedSession(session);
-    setShowFileSelector(true);
-  };
-  
-  // Add a function to handle file selection and navigate to study session
-  const handleFileSelected = (file) => {
-    setShowFileSelector(false);
-    
-    // Navigate to study session with both session ID and file ID
-    navigate(`/study-session?sessionId=${selectedSession._id}&noteId=${file._id}`);
+    // Navigate directly to study session with session ID
+    navigate(`/study-session?sessionId=${session._id}`);
   };
 
   // Handler for opening the Generate Plan modal
@@ -848,9 +837,8 @@ export default function StudyPlanPage() {
                                 description: "Your quick study session has been created"
                               });
                               
-                              // Instead of navigating directly, set the selected session and show file selector
-                              setSelectedSession(data);
-                              setShowFileSelector(true);
+                              // Navigate directly to study session
+                              navigate(`/study-session?sessionId=${data._id}`);
                             })
                             .catch(error => {
                               console.error("Error creating quick session:", error);
@@ -1109,13 +1097,6 @@ export default function StudyPlanPage() {
         </Tabs>
       </main>
       
-      {/* Add the FileSelectionModal */}
-      <FileSelectionModal 
-        open={showFileSelector}
-        onClose={() => setShowFileSelector(false)}
-        subject={selectedSession?.subject}
-        onSelectFile={handleFileSelected}
-      />
       {/* AI-Powered Plan Modal */}
       <PlanModal 
         open={showPlanModal}
