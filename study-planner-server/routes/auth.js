@@ -243,10 +243,12 @@
 
 const express = require('express');
 const passport = require('passport');
+const crypto = require('crypto');
 const router = express.Router();
 const User = require('../models/User');
 const auth = require('../middleware/auth');
 const { generateToken } = require('../config/passport');
+const { sendPasswordResetEmail, sendPasswordChangedEmail } = require('../utils/emailService');
 
 // Helper function to handle MongoDB errors
 const handleMongoError = (error, res) => {
@@ -409,6 +411,109 @@ router.get('/profile', auth, async (req, res) => {
 // Logout route (client-side only)
 router.post('/logout', (req, res) => {
   res.json({ message: 'Logged out successfully' });
+});
+
+// Forgot password route
+router.post('/forgot-password', async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    // Validate input
+    if (!email) {
+      return res.status(400).json({ message: 'Email is required' });
+    }
+
+    // Find user by email
+    const user = await User.findOne({ email });
+    if (!user) {
+      // Don't reveal if user exists or not for security
+      return res.json({ message: 'If an account with that email exists, a password reset link has been sent.' });
+    }
+
+    // Check if user has a password (wasn't created through Google OAuth)
+    if (!user.password) {
+      return res.status(400).json({ 
+        message: 'This account was created with Google. Please use Google Sign-In.' 
+      });
+    }
+
+    // Generate reset token
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenHash = crypto.createHash('sha256').update(resetToken).digest('hex');
+    
+    // Set token expiration (1 hour from now)
+    const resetTokenExpire = new Date(Date.now() + 3600000); // 1 hour
+
+    // Save token to user
+    user.resetToken = resetTokenHash;
+    user.resetTokenExpire = resetTokenExpire;
+    await user.save();
+
+    // Send reset email
+    try {
+      await sendPasswordResetEmail(user.email, resetToken, user.displayName);
+      res.json({ message: 'If an account with that email exists, a password reset link has been sent.' });
+    } catch (emailError) {
+      // If email fails, clear the token
+      user.resetToken = null;
+      user.resetTokenExpire = null;
+      await user.save();
+      
+      console.error('Email sending failed:', emailError);
+      res.status(500).json({ message: 'Failed to send reset email. Please try again later.' });
+    }
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    handleMongoError(error, res);
+  }
+});
+
+// Reset password route
+router.post('/reset-password/:token', async (req, res) => {
+  try {
+    const { token } = req.params;
+    const { newPassword } = req.body;
+
+    // Validate input
+    if (!token || !newPassword) {
+      return res.status(400).json({ message: 'Token and new password are required' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ message: 'Password must be at least 6 characters long' });
+    }
+
+    // Hash the token to compare with stored hash
+    const resetTokenHash = crypto.createHash('sha256').update(token).digest('hex');
+
+    // Find user with valid token and not expired
+    const user = await User.findOne({
+      resetToken: resetTokenHash,
+      resetTokenExpire: { $gt: new Date() }
+    });
+
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid or expired reset token' });
+    }
+
+    // Update password
+    user.password = newPassword;
+    user.resetToken = null;
+    user.resetTokenExpire = null;
+    await user.save();
+
+    // Send confirmation email (don't block on failure)
+    try {
+      await sendPasswordChangedEmail(user.email, user.displayName);
+    } catch (emailError) {
+      console.error('Failed to send password change confirmation email:', emailError);
+    }
+
+    res.json({ message: 'Password reset successful. You can now log in with your new password.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    handleMongoError(error, res);
+  }
 });
 
 module.exports = router; 

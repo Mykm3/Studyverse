@@ -2,6 +2,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "r
 import { Toaster } from "@/components/ui/Toaster";
 import Login from "@/components/Login";
 import Register from "@/components/Register";
+import ForgotPassword from "@/components/ForgotPassword";
+import ResetPassword from "@/components/ResetPassword";
 import AuthCallback from "@/components/AuthCallback";
 import StudyDashboard from "@/components/StudyDashboard";
 import StudyPlanPage from "./pages/studyplan";
@@ -68,6 +70,8 @@ function App() {
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />
+            <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
 
             {/* Protected routes */}
