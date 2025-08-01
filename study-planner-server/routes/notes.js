@@ -930,4 +930,59 @@ router.get('/serve/:id', async (req, res) => {
   }
 });
 
+// Clear all notes for the user
+router.delete('/clear-all', auth, async (req, res) => {
+  try {
+    console.log('[Notes] Attempting to clear all notes for user:', req.user._id);
+    
+    // Find all notes for the user
+    const notes = await Note.find({ userId: req.user._id });
+    const noteCount = notes.length;
+    
+    console.log(`[Notes] Found ${noteCount} notes to delete`);
+    
+    // Delete files from Supabase storage first
+    for (const note of notes) {
+      if (note.fileUrl && note.fileUrl.includes('supabase')) {
+        try {
+          // Extract the file path from the URL
+          const fileUrl = new URL(note.fileUrl);
+          const pathParts = fileUrl.pathname.split('/');
+          const filePath = pathParts[pathParts.length - 1];
+          
+          console.log('[Notes] Deleting file from Supabase:', filePath);
+          
+          const { error } = await supabase.storage
+            .from('studyverse-uploads')
+            .remove([filePath]);
+            
+          if (error) {
+            console.error('[Notes] Error deleting file from Supabase:', error);
+          }
+        } catch (deleteError) {
+          console.error('[Notes] Error deleting file from Supabase:', deleteError);
+          // Continue with note deletion even if file deletion fails
+        }
+      }
+    }
+    
+    // Delete all notes from database
+    const deleteResult = await Note.deleteMany({ userId: req.user._id });
+    
+    console.log('[Notes] Successfully cleared all notes');
+    
+    res.json({ 
+      success: true,
+      message: `Successfully deleted ${noteCount} notes`,
+      deletedCount: noteCount
+    });
+  } catch (error) {
+    console.error('[Notes] Error clearing all notes:', error);
+    res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
+  }
+});
+
 module.exports = router; 

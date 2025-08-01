@@ -41,18 +41,8 @@ export default function SettingsPage() {
 
   // Study preferences state
   const [studyPreferences, setStudyPreferences] = useState({
-    dailyGoal: 3,
     notifications: true,
-    aiSuggestions: true,
-    reminderTime: "18:00",
-    pomodoroLength: 25
-  })
-
-  // App settings state
-  const [appSettings, setAppSettings] = useState({
-    autoSave: true,
-    compactView: false,
-    animationsEnabled: true
+    reminderTime: "18:00"
   })
 
   // Handle profile form changes
@@ -65,13 +55,38 @@ export default function SettingsPage() {
   }
 
   // Handle save changes
-  const handleSaveChanges = () => {
-    // Here you would typically make API calls to save the changes
-    // For now, we'll just show a success toast
-    toast({
-      title: "Settings saved",
-      description: "Your settings have been updated successfully",
-    })
+  const handleSaveChanges = async () => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      const response = await fetch(`${apiUrl}/api/users/profile`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          displayName: profileForm.name,
+          bio: profileForm.bio,
+          studyPreferences
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save settings');
+      }
+
+      toast({
+        title: "Settings saved",
+        description: "Your settings have been updated successfully",
+      });
+    } catch (error) {
+      console.error('Error saving settings:', error);
+      toast({
+        title: "Error",
+        description: "Failed to save settings. Please try again.",
+        variant: "destructive"
+      });
+    }
   }
 
   // Handle account deletion (with confirmation)
@@ -149,10 +164,6 @@ export default function SettingsPage() {
               <BookOpen className="h-4 w-4" />
               Study
             </TabsTrigger>
-            <TabsTrigger value="app" className="flex items-center gap-1">
-              <Settings className="h-4 w-4" />
-              App
-            </TabsTrigger>
             <TabsTrigger value="data" className="flex items-center gap-1">
               <Database className="h-4 w-4" />
               Data
@@ -201,16 +212,8 @@ export default function SettingsPage() {
                 <CardHeader>
                   <CardTitle>Account Management</CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Change Password</Label>
-                    <div className="flex gap-2">
-                      <Input id="password" type="password" placeholder="New password" />
-                      <Button variant="outline">Update</Button>
-                    </div>
-                  </div>
-                  
-                  <div className="pt-4 border-t">
+                                 <CardContent className="space-y-4">
+                   <div className="pt-4 border-t">
                     <h3 className="font-medium text-destructive mb-2">Danger Zone</h3>
                     <div className="flex flex-col gap-2">
                       <Button 
@@ -238,159 +241,64 @@ export default function SettingsPage() {
 
           {/* Study Preferences Tab */}
           <TabsContent value="study">
-            <Card>
-              <CardHeader>
-                <CardTitle>Study Preferences</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="daily-goal">Daily Study Goal</Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Target hours of study per day</p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-[120px]">
-                      <Slider 
-                        defaultValue={[studyPreferences.dailyGoal]} 
-                        max={8} 
-                        step={0.5}
-                        onValueChange={(value) => setStudyPreferences(prev => ({...prev, dailyGoal: value[0]}))}
-                      />
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Study Preferences</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="reminder-time">Daily Reminder Time</Label>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">When to send your daily study reminder</p>
                     </div>
-                    <span className="w-8 text-center">{studyPreferences.dailyGoal}h</span>
+                    <Input 
+                      type="time" 
+                      id="reminder-time" 
+                      className="w-[120px]" 
+                      value={studyPreferences.reminderTime}
+                      onChange={(e) => setStudyPreferences(prev => ({...prev, reminderTime: e.target.value}))}
+                    />
                   </div>
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="pomodoro-length">Pomodoro Session Length</Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Duration of focus sessions in minutes</p>
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="notifications">Study Reminders</Label>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">
+                        Receive notifications for scheduled sessions
+                      </p>
+                    </div>
+                    <Switch 
+                      id="notifications" 
+                      checked={studyPreferences.notifications} 
+                      onCheckedChange={(checked) => setStudyPreferences(prev => ({...prev, notifications: checked}))}
+                    />
                   </div>
-                  <Select 
-                    defaultValue={studyPreferences.pomodoroLength.toString()}
-                    onValueChange={(value) => setStudyPreferences(prev => ({...prev, pomodoroLength: parseInt(value)}))}
-                  >
-                    <SelectTrigger className="w-[100px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="15">15 min</SelectItem>
-                      <SelectItem value="25">25 min</SelectItem>
-                      <SelectItem value="30">30 min</SelectItem>
-                      <SelectItem value="45">45 min</SelectItem>
-                      <SelectItem value="60">60 min</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                </CardContent>
+              </Card>
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="reminder-time">Daily Reminder Time</Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">When to send your daily study reminder</p>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Appearance</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-6">
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="dark-mode">Theme</Label>
+                      <p className="text-sm text-gray-500 dark:text-gray-400">Toggle between light and dark theme</p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Sun className="h-4 w-4 text-muted-foreground" />
+                      <Switch id="dark-mode" checked={isDark} onCheckedChange={toggleTheme} />
+                      <Moon className="h-4 w-4 text-muted-foreground" />
+                    </div>
                   </div>
-                  <Input 
-                    type="time" 
-                    id="reminder-time" 
-                    className="w-[120px]" 
-                    value={studyPreferences.reminderTime}
-                    onChange={(e) => setStudyPreferences(prev => ({...prev, reminderTime: e.target.value}))}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="notifications">Study Reminders</Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Receive notifications for scheduled sessions
-                    </p>
-                  </div>
-                  <Switch 
-                    id="notifications" 
-                    checked={studyPreferences.notifications} 
-                    onCheckedChange={(checked) => setStudyPreferences(prev => ({...prev, notifications: checked}))}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="ai-suggestions">AI Suggestions</Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Allow AI to suggest study topics based on your notes
-                    </p>
-                  </div>
-                  <Switch 
-                    id="ai-suggestions" 
-                    checked={studyPreferences.aiSuggestions} 
-                    onCheckedChange={(checked) => setStudyPreferences(prev => ({...prev, aiSuggestions: checked}))}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
           </TabsContent>
 
-          {/* App Settings Tab */}
-          <TabsContent value="app">
-            <Card>
-              <CardHeader>
-                <CardTitle>Application Settings</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="dark-mode">Theme</Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Toggle between light and dark theme</p>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    <Sun className="h-4 w-4 text-muted-foreground" />
-                    <Switch id="dark-mode" checked={isDark} onCheckedChange={toggleTheme} />
-                    <Moon className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="auto-save">Auto Save</Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Automatically save changes to notes and sessions
-                    </p>
-                  </div>
-                  <Switch 
-                    id="auto-save" 
-                    checked={appSettings.autoSave} 
-                    onCheckedChange={(checked) => setAppSettings(prev => ({...prev, autoSave: checked}))}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="compact-view">Compact View</Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Display more content with reduced padding
-                    </p>
-                  </div>
-                  <Switch 
-                    id="compact-view" 
-                    checked={appSettings.compactView} 
-                    onCheckedChange={(checked) => setAppSettings(prev => ({...prev, compactView: checked}))}
-                  />
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
-                    <Label htmlFor="animations">UI Animations</Label>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Enable or disable interface animations
-                    </p>
-                  </div>
-                  <Switch 
-                    id="animations" 
-                    checked={appSettings.animationsEnabled} 
-                    onCheckedChange={(checked) => setAppSettings(prev => ({...prev, animationsEnabled: checked}))}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
 
           {/* Data Management Tab */}
           <TabsContent value="data">
@@ -445,13 +353,41 @@ export default function SettingsPage() {
                     <Button 
                       variant="outline" 
                       className="border-destructive text-destructive hover:bg-destructive/10"
-                      onClick={() => {
+                      onClick={async () => {
                         if (window.confirm("Are you sure you want to clear all study sessions? This cannot be undone.")) {
-                          toast({
-                            title: "Sessions cleared",
-                            description: "All study sessions have been deleted",
-                            variant: "destructive"
-                          })
+                          try {
+                            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+                            const response = await fetch(`${apiUrl}/api/study-sessions/clear-all`, {
+                              method: 'DELETE',
+                              headers: {
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                              },
+                            });
+
+                            if (!response.ok) {
+                              throw new Error('Failed to clear sessions');
+                            }
+
+                            const result = await response.json();
+                            toast({
+                              title: "Sessions cleared",
+                              description: result.message,
+                              variant: "destructive"
+                            });
+                            
+                            // Refresh the page to update any analytics
+                            setTimeout(() => {
+                              window.location.reload();
+                            }, 2000);
+                            
+                          } catch (error) {
+                            console.error('Error clearing sessions:', error);
+                            toast({
+                              title: "Error",
+                              description: "Failed to clear sessions",
+                              variant: "destructive"
+                            });
+                          }
                         }
                       }}
                     >
@@ -460,13 +396,41 @@ export default function SettingsPage() {
                     <Button 
                       variant="outline" 
                       className="border-destructive text-destructive hover:bg-destructive/10"
-                      onClick={() => {
+                      onClick={async () => {
                         if (window.confirm("Are you sure you want to clear all notes? This cannot be undone.")) {
-                          toast({
-                            title: "Notes cleared",
-                            description: "All notes have been deleted",
-                            variant: "destructive"
-                          })
+                          try {
+                            const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+                            const response = await fetch(`${apiUrl}/api/notes/clear-all`, {
+                              method: 'DELETE',
+                              headers: {
+                                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                              },
+                            });
+
+                            if (!response.ok) {
+                              throw new Error('Failed to clear notes');
+                            }
+
+                            const result = await response.json();
+                            toast({
+                              title: "Notes cleared",
+                              description: result.message,
+                              variant: "destructive"
+                            });
+                            
+                            // Refresh the page to update any analytics
+                            setTimeout(() => {
+                              window.location.reload();
+                            }, 2000);
+                            
+                          } catch (error) {
+                            console.error('Error clearing notes:', error);
+                            toast({
+                              title: "Error",
+                              description: "Failed to clear notes",
+                              variant: "destructive"
+                            });
+                          }
                         }
                       }}
                     >
@@ -477,17 +441,25 @@ export default function SettingsPage() {
                       className="border-destructive text-destructive hover:bg-destructive/10"
                       onClick={() => {
                         if (window.confirm("Are you sure you want to reset all settings? This cannot be undone.")) {
+                                                                                // Reset settings to defaults
+                            setStudyPreferences({
+                              notifications: true,
+                              reminderTime: "18:00"
+                            });
+
                           toast({
                             title: "Settings reset",
                             description: "All settings have been reset to defaults",
                             variant: "destructive"
-                          })
+                          });
                         }
                       }}
                     >
                       Reset Settings
                     </Button>
                   </div>
+                  
+                  
                 </div>
               </CardContent>
             </Card>

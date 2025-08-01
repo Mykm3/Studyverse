@@ -16,6 +16,7 @@ export default function Register() {
   const [formData, setFormData] = useState({
     email: "",
     password: "",
+    confirmPassword: "",
     displayName: "",
   });
 
@@ -31,6 +32,20 @@ export default function Register() {
     e.preventDefault();
     setIsLoading(true);
     setError("");
+
+    // Validate password confirmation
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords do not match");
+      setIsLoading(false);
+      return;
+    }
+
+    // Validate password length
+    if (formData.password.length < 6) {
+      setError("Password must be at least 6 characters long");
+      setIsLoading(false);
+      return;
+    }
 
     try {
       await register(formData.email, formData.password, formData.displayName);
@@ -93,6 +108,18 @@ export default function Register() {
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="Create a password"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirm Password</Label>
+              <Input
+                id="confirmPassword"
+                name="confirmPassword"
+                type="password"
+                required
+                value={formData.confirmPassword}
+                onChange={handleChange}
+                placeholder="Confirm your password"
               />
             </div>
             {error && (

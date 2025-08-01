@@ -445,4 +445,95 @@ router.post('/create-dummy', auth, async (req, res) => {
   }
 });
 
+// Bulk delete sessions from specific months (for cleaning up test data)
+router.delete('/bulk/cleanup-test-sessions', auth, async (req, res) => {
+  try {
+    console.log('Attempting to bulk delete test sessions from Jan-Mar 2025');
+    console.log('User ID:', req.user._id);
+    
+    // Find study plan
+    let studyPlan = await StudyPlan.findOne({ userId: req.user._id });
+    if (!studyPlan) {
+      console.log('Study plan not found for user:', req.user._id);
+      return res.status(404).json({ message: 'Study plan not found' });
+    }
+
+    console.log('Found study plan with sessions count:', studyPlan.sessions.length);
+    
+    // Define date range for January, February, and March 2025
+    const startDate = new Date('2025-01-01T00:00:00.000Z');
+    const endDate = new Date('2025-03-31T23:59:59.999Z');
+    
+    console.log('Deleting sessions between:', startDate, 'and', endDate);
+    
+    // Filter sessions to keep (those outside the date range)
+    const sessionsToKeep = studyPlan.sessions.filter(session => {
+      const sessionStartTime = new Date(session.startTime);
+      const isInDateRange = sessionStartTime >= startDate && sessionStartTime <= endDate;
+      
+      if (isInDateRange) {
+        console.log('Session to delete:', {
+          id: session._id,
+          subject: session.subject,
+          startTime: session.startTime,
+          isAIGenerated: session.isAIGenerated
+        });
+      }
+      
+      return !isInDateRange; // Keep sessions outside the date range
+    });
+    
+    const deletedCount = studyPlan.sessions.length - sessionsToKeep.length;
+    
+    // Update the study plan with filtered sessions
+    studyPlan.sessions = sessionsToKeep;
+    await studyPlan.save();
+    
+    console.log(`Successfully deleted ${deletedCount} sessions from Jan-Mar 2025`);
+    console.log('Remaining sessions:', studyPlan.sessions.length);
+    
+    res.json({ 
+      message: `Successfully deleted ${deletedCount} sessions from January, February, and March 2025`,
+      deletedCount,
+      remainingSessions: studyPlan.sessions.length
+    });
+  } catch (error) {
+    console.error('Error bulk deleting test sessions:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ message: 'Server error', details: error.message });
+  }
+});
+
+// Clear all study sessions for the user
+router.delete('/clear-all', auth, async (req, res) => {
+  try {
+    console.log('Attempting to clear all study sessions for user:', req.user._id);
+    
+    // Find study plan
+    let studyPlan = await StudyPlan.findOne({ userId: req.user._id });
+    if (!studyPlan) {
+      console.log('Study plan not found for user:', req.user._id);
+      return res.status(404).json({ message: 'Study plan not found' });
+    }
+
+    const sessionCount = studyPlan.sessions.length;
+    console.log(`Found ${sessionCount} sessions to delete`);
+
+    // Clear all sessions
+    studyPlan.sessions = [];
+    await studyPlan.save();
+    
+    console.log('Successfully cleared all study sessions');
+    
+    res.json({ 
+      message: `Successfully deleted ${sessionCount} study sessions`,
+      deletedCount: sessionCount
+    });
+  } catch (error) {
+    console.error('Error clearing all study sessions:', error);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({ message: 'Server error', details: error.message });
+  }
+});
+
 module.exports = router; 
