@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/Label";
 import { Alert, AlertDescription } from "@/components/ui/Alert";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import StudyverseLogo from "../assets/Studyverse_Logo3.png";
 
 export default function Register() {
   const { register } = useAuth();
@@ -44,6 +45,13 @@ export default function Register() {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
       <Card className="w-full max-w-md">
         <CardHeader>
+          <div className="flex justify-center mb-4">
+            <img 
+              src={StudyverseLogo} 
+              alt="Studyverse Logo" 
+              className="h-32 w-auto"
+            />
+          </div>
           <CardTitle className="text-2xl font-bold text-center">Create an account</CardTitle>
           <CardDescription className="text-center">
             Sign up to get started with your study journey

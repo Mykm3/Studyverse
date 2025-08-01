@@ -9,6 +9,7 @@ import { useMobile } from "../hooks/use-mobile"
 import { useTheme } from "./ThemeProvider"
 import { useAuth } from "@/contexts/AuthContext"
 import { Avatar, AvatarFallback } from "./ui/Avatar"
+import StudyverseLogo from "../assets/Studyverse_Logo3.png"
 
 export default function Sidebar() {
   const location = useLocation()

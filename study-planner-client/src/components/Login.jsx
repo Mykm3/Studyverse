@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from "@/components/ui/Alert";
 import { Loader2, LogIn, Mail, Lock, ExternalLink } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { showToast } from "@/components/ui/Toaster";
+import StudyverseLogo from "../assets/Studyverse_Logo3.png";
 
 export default function Login() {
   const { login } = useAuth();
@@ -94,8 +95,12 @@ export default function Login() {
         } hover-lift`}
       >
         <CardHeader className="space-y-2">
-          <div className="w-16 h-16 mx-auto bg-gradient-to-br from-primary via-accent to-success rounded-full flex items-center justify-center mb-2 shadow-lg">
-            <LogIn className="h-8 w-8 text-white" />
+          <div className="flex justify-center mb-4">
+            <img 
+              src={StudyverseLogo} 
+              alt="Studyverse Logo" 
+              className="h-32 w-auto"
+            />
           </div>
           <CardTitle className="text-3xl font-bold text-center text-gradient">Welcome Back</CardTitle>
           <CardDescription className="text-center text-muted-foreground">
