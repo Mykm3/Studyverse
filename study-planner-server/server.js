@@ -119,7 +119,13 @@ const app = express();
 // Middleware
 app.use(express.json());
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: [
+    process.env.CLIENT_URL || 'http://localhost:5173',
+    'http://localhost:8081',
+    'http://10.232.51.115:8081',
+    'exp://10.232.51.115:8081',
+    'exp+studyverse-mobile://expo-development-client'
+  ],
   credentials: true
 }));
 
@@ -227,6 +233,8 @@ app.use((err, req, res, next) => {
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on port ${PORT} and listening on all interfaces`);
+  console.log(`Local: http://localhost:${PORT}`);
+  console.log(`Network: http://10.232.51.115:${PORT}`);
 });

@@ -408,9 +408,180 @@ router.get('/profile', auth, async (req, res) => {
   }
 });
 
+// Get current user (alias for /profile)
+router.get('/me', auth, async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('-password');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.json(user);
+  } catch (error) {
+    console.error('Error fetching current user:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
 // Logout route (client-side only)
 router.post('/logout', (req, res) => {
   res.json({ message: 'Logged out successfully' });
+});
+
+// Refresh token endpoint
+router.post('/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    
+    if (!refreshToken) {
+      return res.status(400).json({ message: 'Refresh token is required' });
+    }
+
+    // For now, we'll just generate a new token
+    // In production, you would validate the refresh token
+    const user = await User.findOne({ email: 'michaelmanu2019@gmail.com' });
+    if (!user) {
+      return res.status(401).json({ message: 'Invalid refresh token' });
+    }
+
+    const newToken = generateToken(user);
+    
+    res.json({
+      token: newToken,
+      refreshToken: refreshToken // Return the same refresh token for now
+    });
+  } catch (error) {
+    console.error('Token refresh error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+});
+
+// Mobile Google Auth endpoint
+router.post('/mobile/google', async (req, res) => {
+  try {
+    const { token } = req.body;
+    
+    console.log('[Mobile Auth] Received Google ID token verification request');
+    
+    // Validate input
+    if (!token) {
+      console.log('[Mobile Auth] Missing ID token in request');
+      return res.status(400).json({ 
+        success: false,
+        message: 'Google ID token is required' 
+      });
+    }
+
+    // For now, we'll create a mock user since Google OAuth isn't fully configured
+    // In production, you would verify the Google ID token here
+    const mockUserInfo = {
+      email: 'michaelmanu2019@gmail.com',
+      name: 'Michael (Google)',
+      id: 'google-user-123',
+      picture: 'https://via.placeholder.com/150'
+    };
+    
+    // Find or create user in database
+    let dbUser = await User.findOne({ email: mockUserInfo.email });
+    
+    if (!dbUser) {
+      // Create new user
+      dbUser = new User({
+        email: mockUserInfo.email,
+        displayName: mockUserInfo.name,
+        photoUrl: mockUserInfo.picture,
+        googleId: mockUserInfo.id
+      });
+      await dbUser.save();
+      console.log('[Mobile Auth] Created new user:', dbUser.email);
+    }
+
+    // Generate JWT token
+    const jwtToken = generateToken(dbUser);
+    
+    console.log('[Mobile Auth] Authentication successful for user:', {
+      id: dbUser._id,
+      email: dbUser.email,
+      displayName: dbUser.displayName
+    });
+    
+    res.json({
+      success: true,
+      token: jwtToken,
+      refreshToken: 'mock-refresh-token-' + dbUser._id, // Mock refresh token for now
+      user: {
+        _id: dbUser._id,
+        email: dbUser.email,
+        name: dbUser.displayName,
+        picture: dbUser.photoUrl,
+        googleId: dbUser.googleId,
+        createdAt: dbUser.createdAt,
+        updatedAt: dbUser.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('[Mobile Auth] Authentication failed:', error.message);
+    handleMongoError(error, res);
+  }
+});
+
+// Development login endpoint for mobile testing
+router.post('/mobile/development', async (req, res) => {
+  try {
+    const { user } = req.body;
+    
+    console.log('[Development Auth] Received development login request for:', user?.email);
+    
+    // Validate input
+    if (!user || !user.email) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'User data is required' 
+      });
+    }
+
+    // Find or create user in database
+    let dbUser = await User.findOne({ email: user.email });
+    
+    if (!dbUser) {
+      // Create new user for development
+      dbUser = new User({
+        email: user.email,
+        displayName: user.name,
+        photoUrl: user.avatar,
+        googleId: user.id || 'dev-google-id',
+        isDevelopmentUser: true
+      });
+      await dbUser.save();
+      console.log('[Development Auth] Created new development user:', dbUser.email);
+    }
+
+    // Generate JWT token
+    const token = generateToken(dbUser);
+    
+    console.log('[Development Auth] Development login successful for user:', {
+      id: dbUser._id,
+      email: dbUser.email,
+      displayName: dbUser.displayName
+    });
+    
+    res.json({
+      success: true,
+      token: token,
+      refreshToken: 'dev-refresh-token-' + dbUser._id, // Mock refresh token for development
+      user: {
+        _id: dbUser._id,
+        email: dbUser.email,
+        name: dbUser.displayName,
+        picture: dbUser.photoUrl,
+        googleId: dbUser.googleId,
+        createdAt: dbUser.createdAt,
+        updatedAt: dbUser.updatedAt
+      }
+    });
+  } catch (error) {
+    console.error('[Development Auth] Development login failed:', error.message);
+    handleMongoError(error, res);
+  }
 });
 
 // Forgot password route
