@@ -2,7 +2,7 @@
 
 import { Button } from "../components/ui/Button"
 import { Input } from "../components/ui/Input"
-import { Settings, Save, LogOut, Trash2, Bell, Moon, Sun, User, BookOpen, Database, RefreshCw, Download } from "lucide-react"
+import { Settings, Save, LogOut, Trash2, Bell, Moon, Sun, User, BookOpen, Database, RefreshCw, Download, AlertTriangle } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "../components/ui/Card"
 import { Switch } from "../components/ui/Switch"
 import { Label } from "../components/ui/Label"
@@ -44,6 +44,10 @@ export default function SettingsPage() {
     notifications: true,
     reminderTime: "18:00"
   })
+
+  // Subjects state
+  const [subjects, setSubjects] = useState([])
+  const [loadingSubjects, setLoadingSubjects] = useState(false)
 
   // Handle profile form changes
   const handleProfileChange = (e) => {
@@ -101,6 +105,91 @@ export default function SettingsPage() {
       logout()
     }
   }
+
+  // Fetch subjects
+  const fetchSubjects = async () => {
+    setLoadingSubjects(true)
+    try {
+      const token = localStorage.getItem('token')
+      if (!token) return
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+
+      // Fetch study plan to get subjects
+      const response = await fetch(`${apiUrl}/api/study-sessions`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        // Extract unique subjects from sessions
+        const uniqueSubjects = [...new Set(data.map(session => session.subject))]
+        setSubjects(uniqueSubjects)
+      }
+    } catch (error) {
+      console.error('Error fetching subjects:', error)
+    } finally {
+      setLoadingSubjects(false)
+    }
+  }
+
+  // Delete subject and all related data
+  const handleDeleteSubject = async (subject) => {
+    if (!window.confirm(`Are you sure you want to delete "${subject}" and all related sessions and notes? This cannot be undone.`)) {
+      return
+    }
+
+    try {
+      const token = localStorage.getItem('token')
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000'
+
+      // Delete sessions for this subject
+      const sessionsResponse = await fetch(`${apiUrl}/api/study-sessions/subject/${encodeURIComponent(subject)}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      // Delete notes for this subject
+      const notesResponse = await fetch(`${apiUrl}/api/notes/subject/${encodeURIComponent(subject)}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      })
+
+      if (sessionsResponse.ok || notesResponse.ok) {
+        toast({
+          title: "Subject deleted",
+          description: `"${subject}" and all related data have been deleted`,
+          variant: "destructive"
+        })
+
+        // Refresh subjects list
+        fetchSubjects()
+      } else {
+        throw new Error('Failed to delete subject data')
+      }
+    } catch (error) {
+      console.error('Error deleting subject:', error)
+      toast({
+        title: "Error",
+        description: "Failed to delete subject",
+        variant: "destructive"
+      })
+    }
+  }
+
+  // Load subjects on component mount
+  useEffect(() => {
+    fetchSubjects()
+  }, [])
 
   // Handle data export
   const handleExportData = () => {
@@ -307,6 +396,48 @@ export default function SettingsPage() {
                 <CardTitle>Data Management</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {/* Subject Management Section */}
+                <div className="mb-6">
+                  <h3 className="font-medium mb-4 flex items-center">
+                    <BookOpen className="h-4 w-4 mr-2 text-primary" />
+                    Subject Management
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+                    Manage your subjects and delete all related sessions and notes
+                  </p>
+
+                  {loadingSubjects ? (
+                    <div className="flex items-center justify-center py-8">
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary"></div>
+                    </div>
+                  ) : subjects.length > 0 ? (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {subjects.map((subject) => (
+                        <div key={subject} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex items-center">
+                            <BookOpen className="h-4 w-4 mr-2 text-muted-foreground" />
+                            <span className="font-medium">{subject}</span>
+                          </div>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="border-destructive text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteSubject(subject)}
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      <BookOpen className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                      <p>No subjects found</p>
+                    </div>
+                  )}
+                </div>
+
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="p-4 border rounded-lg">
                     <h3 className="font-medium mb-2 flex items-center">
@@ -320,7 +451,7 @@ export default function SettingsPage() {
                       Export Data
                     </Button>
                   </div>
-                  
+
                   <div className="p-4 border rounded-lg">
                     <h3 className="font-medium mb-2 flex items-center">
                       <RefreshCw className="h-4 w-4 mr-2 text-primary" />
@@ -329,7 +460,7 @@ export default function SettingsPage() {
                     <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
                       Force synchronization with the cloud
                     </p>
-                    <Button 
+                    <Button
                       variant="outline"
                       onClick={() => {
                         toast({

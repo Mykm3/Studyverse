@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Progress } from "@/components/ui/Progress"
-import { Calendar, Clock, BookOpen, TrendingUp, Plus, Award, Sparkles } from "lucide-react"
+import { Calendar, Clock, CheckCircle, TrendingUp, Award, Sparkles } from "lucide-react"
 import NotificationDashboard from "@/components/NotificationDashboard"
 import RecentNotes from "@/components/RecentNotes"
 import { Link } from "react-router-dom"
@@ -49,6 +49,74 @@ export default function StudyDashboard() {
     fetchSessions();
   }, []);
 
+  // Helper functions for dashboard metrics
+  const getWeeklyProgress = () => {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - now.getDay()); // Start of current week (Sunday)
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6); // End of current week (Saturday)
+    endOfWeek.setHours(23, 59, 59, 999);
+
+    const weekSessions = sessions.filter(session => {
+      const sessionDate = new Date(session.startTime);
+      return sessionDate >= startOfWeek && sessionDate <= endOfWeek;
+    });
+
+    const completedSessions = weekSessions.filter(session => session.status === 'completed').length;
+    const totalSessions = weekSessions.length;
+
+    return { completed: completedSessions, total: totalSessions };
+  };
+
+  const getTodayStudyTime = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+
+    const todaySessions = sessions.filter(session => {
+      const sessionDate = new Date(session.startTime);
+      return sessionDate >= today && sessionDate < tomorrow && session.status === 'completed';
+    });
+
+    const totalMinutes = todaySessions.reduce((total, session) => {
+      const start = new Date(session.startTime);
+      const end = new Date(session.endTime);
+      return total + (end - start) / (1000 * 60); // Convert to minutes
+    }, 0);
+
+    const hours = Math.floor(totalMinutes / 60);
+    const minutes = Math.round(totalMinutes % 60);
+    return { hours, minutes, totalMinutes };
+  };
+
+  const getSessionCompletionStreak = () => {
+    if (sessions.length === 0) return 0;
+
+    // Sort sessions by start time (most recent first)
+    const sortedSessions = [...sessions]
+      .filter(session => session.status !== 'cancelled')
+      .sort((a, b) => new Date(b.startTime) - new Date(a.startTime));
+
+    let streak = 0;
+    for (const session of sortedSessions) {
+      if (session.status === 'completed') {
+        streak++;
+      } else if (session.status === 'scheduled') {
+        // Skip future sessions
+        continue;
+      } else {
+        // Break streak if we find a missed session
+        break;
+      }
+    }
+
+    return streak;
+  };
+
   return (
     <div className="p-6 space-y-6 page-transition">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -66,27 +134,28 @@ export default function StudyDashboard() {
               View Calendar
             </Button>
           </Link>
-          <Link to="/add-session">
-            <Button variant="gradient" size="sm" className="shadow-md">
-              <Plus className="mr-2 h-4 w-4" />
-              New Study Session
-            </Button>
-          </Link>
         </div>
       </div>
 
-      {/* Achievement Banner */}
-      <div 
+      {/* Session Completion Streak Banner */}
+      <div
         className={`bg-gradient rounded-lg shadow-lg text-white p-4 flex items-center transition-all duration-500 transform ${
           isLoading ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
         }`}
       >
-        <Award className="h-10 w-10 mr-4" />
+        <CheckCircle className="h-10 w-10 mr-4" />
         <div className="flex-1">
-          <h3 className="font-bold text-lg text-white">Study streak: 7 days!</h3>
-          <p className="text-white">You're on a roll! Keep studying daily to maintain your streak.</p>
+          <h3 className="font-bold text-lg text-white">
+            Session Completion Streak: {getSessionCompletionStreak()} sessions! ✅
+          </h3>
+          <p className="text-white">
+            {getSessionCompletionStreak() > 0
+              ? `${getSessionCompletionStreak()} planned sessions completed in a row. Keep it up!`
+              : "Complete your next planned session to start a streak!"
+            }
+          </p>
         </div>
-        <Link to="/analytics">
+        <Link to="/study-plan?tab=review">
           <Button variant="default" size="sm" className="ml-auto bg-white/20 hover:bg-white/30">
             View Stats
           </Button>
@@ -95,35 +164,52 @@ export default function StudyDashboard() {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        {[
-          {
-            title: "Study Time Today",
-            icon: <Clock className="h-6 w-6 text-primary/80" />,
-            value: "2h 15m",
-            progress: 75,
-            description: "75% of daily goal",
-            color: "from-blue-500 to-indigo-500",
-            delay: 100
-          },
-          {
-            title: "Topics Covered",
-            icon: <BookOpen className="h-6 w-6 text-success/80" />,
-            value: "12",
-            progress: 60,
-            description: "60% of weekly goal",
-            color: "from-green-500 to-emerald-500",
-            delay: 200
-          },
-          {
-            title: "Learning Streak",
-            icon: <TrendingUp className="h-6 w-6 text-warning/80" />,
-            value: "7 days",
-            progress: 100,
-            description: "Keep it up!",
-            color: "from-amber-500 to-orange-500",
-            delay: 300
-          }
-        ].map((card, index) => (
+        {(() => {
+          const todayStudyTime = getTodayStudyTime();
+          const weeklyProgress = getWeeklyProgress();
+          const sessionStreak = getSessionCompletionStreak();
+
+          // Calculate daily goal progress (assuming 3 hours daily goal)
+          const dailyGoalMinutes = 3 * 60; // 3 hours in minutes
+          const todayProgress = Math.min((todayStudyTime.totalMinutes / dailyGoalMinutes) * 100, 100);
+
+          // Calculate weekly progress percentage
+          const weeklyProgressPercent = weeklyProgress.total > 0
+            ? (weeklyProgress.completed / weeklyProgress.total) * 100
+            : 0;
+
+          return [
+            {
+              title: "Study Time Today",
+              icon: <Clock className="h-6 w-6 text-primary/80" />,
+              value: todayStudyTime.hours > 0 || todayStudyTime.minutes > 0
+                ? `${todayStudyTime.hours}h ${todayStudyTime.minutes}m`
+                : "0h 0m",
+              progress: Math.round(todayProgress),
+              description: `${Math.round(todayProgress)}% of daily goal`,
+              color: "from-blue-500 to-indigo-500",
+              delay: 100
+            },
+            {
+              title: "Weekly Progress Tracker",
+              icon: <CheckCircle className="h-6 w-6 text-success/80" />,
+              value: `${weeklyProgress.completed} / ${weeklyProgress.total}`,
+              progress: Math.round(weeklyProgressPercent),
+              description: `${weeklyProgress.completed} sessions done this week`,
+              color: "from-green-500 to-emerald-500",
+              delay: 200
+            },
+            {
+              title: "Session Completion Streak",
+              icon: <TrendingUp className="h-6 w-6 text-warning/80" />,
+              value: `${sessionStreak} sessions`,
+              progress: sessionStreak > 0 ? 100 : 0,
+              description: sessionStreak > 0 ? "Keep it up!" : "Start your streak!",
+              color: "from-amber-500 to-orange-500",
+              delay: 300
+            }
+          ];
+        })().map((card, index) => (
           <Card 
             key={index} 
             className={`hover-lift border border-transparent hover:border-primary/20 transition-all duration-500 ${

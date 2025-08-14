@@ -570,6 +570,62 @@ router.get('/view/:id', async (req, res) => {
   }
 });
 
+// Delete all notes for a specific subject
+router.delete('/subject/:subject', auth, async (req, res) => {
+  try {
+    const subject = decodeURIComponent(req.params.subject);
+    console.log('[Notes] Attempting to delete all notes for subject:', subject, 'user:', req.user._id);
+
+    // Find all notes for the user and subject
+    const notes = await Note.find({
+      userId: req.user._id,
+      subject: subject
+    });
+    const noteCount = notes.length;
+
+    console.log(`[Notes] Found ${noteCount} notes to delete for subject "${subject}"`);
+
+    // Delete files from Supabase storage
+    for (const note of notes) {
+      if (note.fileUrl && note.fileUrl.includes('supabase')) {
+        try {
+          const fileUrl = new URL(note.fileUrl);
+          const pathParts = fileUrl.pathname.split('/');
+          const filePath = pathParts[pathParts.length - 1];
+
+          console.log('[Notes] Deleting file from Supabase:', filePath);
+
+          const { error } = await supabase.storage
+            .from('studyverse-uploads')
+            .remove([filePath]);
+
+          if (error) {
+            console.error('[Notes] Error deleting file from Supabase:', error);
+          }
+        } catch (deleteError) {
+          console.error('[Notes] Error deleting file from Supabase:', deleteError);
+        }
+      }
+    }
+
+    // Delete all notes for this subject from database
+    await Note.deleteMany({
+      userId: req.user._id,
+      subject: subject
+    });
+
+    console.log(`[Notes] Successfully deleted ${noteCount} notes for subject "${subject}"`);
+
+    res.json({
+      message: `Successfully deleted ${noteCount} notes for subject "${subject}"`,
+      deletedCount: noteCount
+    });
+  } catch (error) {
+    console.error('[Notes] Error deleting notes by subject:', error);
+    res.status(500).json({ message: 'Server error', details: error.message });
+  }
+});
+
 // Get a specific note
 router.get('/:id', async (req, res) => {
   console.log('[Backend] Fetching specific note:', {
@@ -934,11 +990,11 @@ router.get('/serve/:id', async (req, res) => {
 router.delete('/clear-all', auth, async (req, res) => {
   try {
     console.log('[Notes] Attempting to clear all notes for user:', req.user._id);
-    
+
     // Find all notes for the user
     const notes = await Note.find({ userId: req.user._id });
     const noteCount = notes.length;
-    
+
     console.log(`[Notes] Found ${noteCount} notes to delete`);
     
     // Delete files from Supabase storage first

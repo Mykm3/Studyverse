@@ -58,6 +58,45 @@ router.get('/', auth, async (req, res) => {
   }
 });
 
+// Delete all sessions for a specific subject
+router.delete('/subject/:subject', auth, async (req, res) => {
+  try {
+    const subject = decodeURIComponent(req.params.subject);
+    console.log('Attempting to delete all sessions for subject:', subject, 'user:', req.user._id);
+
+    // Find study plan
+    let studyPlan = await StudyPlan.findOne({ userId: req.user._id });
+    if (!studyPlan) {
+      console.log('Study plan not found for user:', req.user._id);
+      return res.status(404).json({ message: 'Study plan not found' });
+    }
+
+    const originalCount = studyPlan.sessions.length;
+    console.log(`Found ${originalCount} total sessions`);
+
+    // Filter out sessions for this subject
+    studyPlan.sessions = studyPlan.sessions.filter(session => session.subject !== subject);
+    const deletedCount = originalCount - studyPlan.sessions.length;
+
+    // Remove subject from subjects list if no sessions remain for it
+    if (deletedCount > 0 && studyPlan.subjects.includes(subject)) {
+      studyPlan.subjects = studyPlan.subjects.filter(s => s !== subject);
+    }
+
+    await studyPlan.save();
+
+    console.log(`Successfully deleted ${deletedCount} sessions for subject "${subject}"`);
+
+    res.json({
+      message: `Successfully deleted ${deletedCount} sessions for subject "${subject}"`,
+      deletedCount
+    });
+  } catch (error) {
+    console.error('Error deleting sessions by subject:', error);
+    res.status(500).json({ message: 'Server error', details: error.message });
+  }
+});
+
 // Get a single study session by ID
 router.get('/:sessionId', auth, async (req, res) => {
   try {
@@ -508,7 +547,7 @@ router.delete('/bulk/cleanup-test-sessions', auth, async (req, res) => {
 router.delete('/clear-all', auth, async (req, res) => {
   try {
     console.log('Attempting to clear all study sessions for user:', req.user._id);
-    
+
     // Find study plan
     let studyPlan = await StudyPlan.findOne({ userId: req.user._id });
     if (!studyPlan) {
@@ -522,10 +561,10 @@ router.delete('/clear-all', auth, async (req, res) => {
     // Clear all sessions
     studyPlan.sessions = [];
     await studyPlan.save();
-    
+
     console.log('Successfully cleared all study sessions');
-    
-    res.json({ 
+
+    res.json({
       message: `Successfully deleted ${sessionCount} study sessions`,
       deletedCount: sessionCount
     });

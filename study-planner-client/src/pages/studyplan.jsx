@@ -8,7 +8,7 @@ import NotificationDashboard from "../components/NotificationDashboard";
 import { useToast } from "../lib/toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/Tabs";
 import StudyPlan from "../components/StudyPlan";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { useSubjects } from "../contexts/SubjectContext";
@@ -64,7 +64,17 @@ export default function StudyPlanPage() {
   const [activeTab, setActiveTab] = useState("plan");
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
   const { subjects } = useSubjects();
+
+  // Check for tab parameter in URL on component mount
+  useEffect(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const tabParam = searchParams.get('tab');
+    if (tabParam && ['plan', 'launch', 'review'].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [location.search]);
   
   // State for the enhanced view tab
   const [searchQuery, setSearchQuery] = useState("");

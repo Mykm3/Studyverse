@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Brain, ArrowLeft, Search, Plus, FolderPlus, SortAsc, Notebook } from "lucide-react";
+import { Brain, ArrowLeft, Search, Plus, FolderPlus, SortAsc, Notebook, BookOpen } from "lucide-react";
 import { Button } from "../components/ui/Button";
 import { Input } from "../components/ui/Input";
 import { Card, CardContent } from "../components/ui/Card";
@@ -435,27 +435,7 @@ export default function NotebookPage() {
           <Notebook className="h-8 w-8 text-primary" />
           <h1 className="text-2xl font-bold text-foreground">Notebook</h1>
         </div>
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" className="flex gap-2" onClick={() => navigate("/")}>
-            <ArrowLeft className="h-4 w-4" />
-            <span>Dashboard</span>
-          </Button>
-          <Button variant="outline" size="sm" className="flex gap-2" onClick={() => navigate("/calendar")}>
-            <ArrowLeft className="h-4 w-4" />
-            <span>Calendar</span>
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="bg-primary/5 hover:bg-primary/10 text-primary flex items-center gap-1 border-primary/30"
-            onClick={() => navigate('/test-upload')}
-          >
-            <span>Test Upload</span>
-          </Button>
-          <Button variant="default" size="sm" className="bg-primary hover:bg-primary/90">
-            <span>AI Assist</span>
-          </Button>
-        </div>
+
       </header>
 
       <div className="grid grid-cols-12 gap-6">
@@ -464,32 +444,23 @@ export default function NotebookPage() {
           <Card className="shadow-md hover:shadow-lg transition-all duration-300">
             <CardContent className="p-6">
               <div className="flex flex-col items-center">
-                <h2 className="text-lg font-semibold mb-4">Overall Progress</h2>
-                {subjectsLoading ? (
-                  <div className="h-[150px] w-[150px] flex items-center justify-center">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
-                  </div>
-                ) : (
-                  <CircularProgress 
-                    value={overallProgress} 
-                    size={150} 
-                    strokeWidth={10} 
-                    progressColor="var(--primary-color)" 
-                  />
-                )}
-                <p className="mt-4 text-sm text-muted-foreground">
-                  {subjects && subjects.length > 0 
-                    ? `You've completed ${overallProgress}% of your study materials`
-                    : "No study materials added yet"}
+                <div className="h-[150px] w-[150px] flex items-center justify-center mb-4">
+                  <BookOpen className="h-20 w-20 text-primary/60" />
+                </div>
+                <h2 className="text-lg font-semibold mb-2">Upload Your Notes</h2>
+                <p className="text-sm text-muted-foreground text-center mb-4">
+                  {subjects && subjects.length > 0
+                    ? "Add more study materials to expand your knowledge base"
+                    : "Get started by uploading your first study materials"}
                 </p>
                 <Button
-                  className="w-full mt-4 bg-primary hover:bg-primary/90"
+                  className="w-full bg-primary hover:bg-primary/90"
                   onClick={() => setIsUploadModalOpen(true)}
                 >
                   <Plus className="h-4 w-4 mr-2" />
-                  {subjects && subjects.length > 0 
-                    ? "Add New Material" 
-                    : "Add Your First Notes"}
+                  {subjects && subjects.length > 0
+                    ? "Add New Material"
+                    : "Upload Your First Notes"}
                 </Button>
               </div>
             </CardContent>
