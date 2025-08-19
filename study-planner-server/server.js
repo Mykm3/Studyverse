@@ -12,6 +12,9 @@ const groqRoutes = require('./routes/groq');
 const aiRoutes = require('./routes/ai');
 const geminiStudyPlanRoutes = require('./routes/gemini-studyplan');
 
+// Import IP Monitor for real-time IP detection
+const IPMonitor = require('./ip-monitor');
+
 // Debug logging
 console.log('Server configuration:');
 console.log('MONGODB_URI:', process.env.MONGODB_URI ? 'Present' : 'Missing');
@@ -116,16 +119,67 @@ connectWithRetry();
 
 const app = express();
 
+// Initialize IP Monitor for real-time IP detection
+let ipMonitor = null;
+if (process.env.NODE_ENV === 'development') {
+  const PORT = process.env.PORT || 5000;
+  ipMonitor = new IPMonitor({
+    interval: 10000, // Check every 10 seconds
+    port: PORT,
+    onChange: (newIP, oldIP) => {
+      console.log(`🔄 StudyVerse Server IP updated: ${oldIP} -> ${newIP}`);
+      console.log(`📱 Update your mobile app to use: http://${newIP}:${PORT}`);
+      console.log(`🌐 CORS will accept: http://${newIP}:8081, exp://${newIP}:8081`);
+    }
+  });
+
+  // Start monitoring
+  ipMonitor.start();
+
+  // Add server info endpoint for debugging
+  ipMonitor.addServerInfoEndpoint(app);
+}
+
+// Get current IP for dynamic CORS origins
+const getCurrentIP = () => {
+  if (ipMonitor) {
+    return ipMonitor.getCurrentIP();
+  }
+  // Fallback to existing hardcoded IP
+  return '10.232.51.115';
+};
+
 // Middleware
 app.use(express.json());
+
+// Dynamic CORS configuration that updates with IP changes
 app.use(cors({
-  origin: [
-    process.env.CLIENT_URL || 'http://localhost:5173',
-    'http://localhost:8081',
-    'http://10.232.51.115:8081',
-    'exp://10.232.51.115:8081',
-    'exp+studyverse-mobile://expo-development-client'
-  ],
+  origin: (origin, callback) => {
+    const currentIP = getCurrentIP();
+    const allowedOrigins = [
+      process.env.CLIENT_URL || 'http://localhost:5173',
+      'http://localhost:8081',
+      `http://${currentIP}:8081`,
+      `exp://${currentIP}:8081`,
+      'exp+studyverse-mobile://expo-development-client',
+      // Keep existing hardcoded IPs for backward compatibility
+      'http://10.232.51.115:8081',
+      'exp://10.232.51.115:8081',
+      'http://10.233.225.243:8081',
+      'exp://10.233.225.243:8081'
+    ];
+
+    // Allow requests with no origin (mobile apps, Postman, etc.)
+    if (!origin) return callback(null, true);
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      console.log(`🚫 CORS blocked origin: ${origin}`);
+      console.log(`✅ Allowed origins: ${allowedOrigins.join(', ')}`);
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
   credentials: true
 }));
 
@@ -234,7 +288,20 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on port ${PORT} and listening on all interfaces`);
-  console.log(`Local: http://localhost:${PORT}`);
-  console.log(`Network: http://10.232.51.115:${PORT}`);
+  const currentIP = getCurrentIP();
+  console.log(`\n🚀 StudyVerse Server is running on port ${PORT}`);
+  console.log(`📍 Server listening on all interfaces (0.0.0.0:${PORT})`);
+  console.log(`\n📱 Mobile App URLs:`);
+  console.log(`   Current IP: http://${currentIP}:${PORT}`);
+  console.log(`   Localhost: http://localhost:${PORT}`);
+  console.log(`\n🔧 Development URLs:`);
+  console.log(`   Server Info: http://${currentIP}:${PORT}/api/server-info`);
+  console.log(`   Health Check: http://${currentIP}:${PORT}/`);
+
+  if (ipMonitor) {
+    console.log(`\n🔍 IP Monitor: Active (checking every 10 seconds)`);
+    console.log(`📝 Auto-updating .env files when IP changes`);
+  }
+
+  console.log(`\n✨ Ready to accept connections!\n`);
 });

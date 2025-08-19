@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "../components/ui/Button"
-import { CalendarIcon, Plus, ChevronLeft, ChevronRight, PieChart, ListChecks, Play, BarChart, Clock, Search, Filter, Book, Sparkles, TrendingUp } from "lucide-react"
+import { CalendarIcon, Plus, ChevronLeft, ChevronRight, PieChart, ListChecks, Play, BarChart, Clock, Search, Filter, Book, Sparkles, TrendingUp, BarChart3, CheckCircle2, Calendar as CalendarLucide, Target, Award, Activity, BookOpen, Timer, Brain, Zap } from "lucide-react"
 import StudyCalendar from "../components/StudyCalendar"
 import UpcomingSessions from "../components/UpcomingSessions"
 import Calendar from "../components/Calendar";
@@ -1063,7 +1063,7 @@ export default function StudyPlanPage() {
                   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
                   const weekAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
                   const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
-                  
+
                   // Calculate statistics using only valid sessions
                   const totalSessions = validSessions.length;
                   const completedSessions = validSessions.filter(s => s.progress === 100 || s.status === 'completed').length;
@@ -1075,14 +1075,14 @@ export default function StudyPlanPage() {
                     const sessionDate = new Date(s.startTime);
                     return sessionDate > now;
                   }).length;
-                  
+
                   // Calculate time statistics using only valid sessions
                   const totalStudyTime = validSessions.reduce((total, session) => {
                     const start = new Date(session.startTime);
                     const end = new Date(session.endTime);
                     return total + (end - start) / (1000 * 60 * 60); // Convert to hours
                   }, 0);
-                  
+
                   const weeklyStudyTime = validSessions.filter(s => {
                     const sessionDate = new Date(s.startTime);
                     return sessionDate >= weekAgo;
@@ -1091,9 +1091,9 @@ export default function StudyPlanPage() {
                     const end = new Date(session.endTime);
                     return total + (end - start) / (1000 * 60 * 60);
                   }, 0);
-                  
+
                   const completionRate = totalSessions > 0 ? Math.round((completedSessions / totalSessions) * 100) : 0;
-                  
+
                   return [
                     {
                       title: "Total Sessions",
@@ -1160,72 +1160,71 @@ export default function StudyPlanPage() {
                     </CardHeader>
                     <CardContent>
                       {(() => {
-                                                 // Group sessions by subject and calculate performance
-                         const subjectStats = {};
-                         validSessions.forEach(session => {
-                           if (!session.subject) return;
-                          
-                          if (!subjectStats[session.subject]) {
-                            subjectStats[session.subject] = {
-                              total: 0,
-                              completed: 0,
-                              totalTime: 0,
-                              avgProgress: 0,
-                              progressSum: 0
-                            };
+                        // Calculate subject performance statistics
+                        const subjectStats = validSessions.reduce((acc, session) => {
+                          if (!acc[session.subject]) {
+                            acc[session.subject] = { total: 0, completed: 0, time: 0 };
                           }
-                          
-                          subjectStats[session.subject].total++;
+                          acc[session.subject].total++;
                           if (session.progress === 100 || session.status === 'completed') {
-                            subjectStats[session.subject].completed++;
+                            acc[session.subject].completed++;
                           }
-                          
-                          if (session.startTime && session.endTime) {
-                            const start = new Date(session.startTime);
-                            const end = new Date(session.endTime);
-                            subjectStats[session.subject].totalTime += (end - start) / (1000 * 60 * 60);
-                          }
-                          
-                          subjectStats[session.subject].progressSum += session.progress || 0;
-                        });
-                        
-                        // Calculate averages and percentages
-                        Object.keys(subjectStats).forEach(subject => {
-                          const stats = subjectStats[subject];
-                          stats.completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
-                          stats.avgProgress = stats.total > 0 ? Math.round(stats.progressSum / stats.total) : 0;
-                        });
-                        
-                        const sortedSubjects = Object.entries(subjectStats)
-                          .sort(([,a], [,b]) => b.completionRate - a.completionRate);
-                        
+                          const start = new Date(session.startTime);
+                          const end = new Date(session.endTime);
+                          acc[session.subject].time += (end - start) / (1000 * 60 * 60);
+                          return acc;
+                        }, {});
+
+                        const subjectPerformance = Object.entries(subjectStats).map(([subject, stats]) => ({
+                          subject,
+                          completionRate: Math.round((stats.completed / stats.total) * 100),
+                          totalHours: stats.time.toFixed(1),
+                          sessions: stats.total,
+                          completed: stats.completed
+                        }));
+
+                        if (subjectPerformance.length === 0) {
+                          return (
+                            <div className="text-center py-8 text-muted-foreground">
+                              <BookOpen className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                              <p className="font-medium">No subject data available</p>
+                              <p className="text-sm">Complete some study sessions to see performance metrics</p>
+                            </div>
+                          );
+                        }
+
                         return (
                           <div className="space-y-4">
-                            {sortedSubjects.map(([subject, stats], index) => (
-                              <div key={subject} className="flex items-center justify-between p-3 bg-muted/30 rounded-lg">
-                                <div className="flex items-center gap-3">
-                                  <div 
-                                    className="w-3 h-3 rounded-full"
-                                    style={{ backgroundColor: subjectColorMap[subject] || generateColorFromString(subject) }}
-                                  />
+                            {subjectPerformance.map((subject, index) => (
+                              <div key={index} className="p-4 rounded-lg border bg-card hover:shadow-sm transition-shadow">
+                                <div className="flex items-center justify-between mb-3">
                                   <div>
-                                    <p className="font-medium">{subject}</p>
+                                    <h4 className="font-semibold text-lg">{subject.subject}</h4>
                                     <p className="text-sm text-muted-foreground">
-                                      {stats.total} sessions • {stats.totalTime.toFixed(1)}h
+                                      {subject.sessions} sessions • {subject.totalHours}h total
                                     </p>
                                   </div>
+                                  <div className="text-right">
+                                    <div className="text-2xl font-bold text-primary">{subject.completionRate}%</div>
+                                    <div className="text-xs text-muted-foreground">completion rate</div>
+                                  </div>
                                 </div>
-                                <div className="text-right">
-                                  <p className="font-medium">{stats.completionRate}%</p>
-                                  <p className="text-sm text-muted-foreground">completed</p>
+
+                                {/* Progress Bar */}
+                                <div className="space-y-2">
+                                  <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Progress</span>
+                                    <span className="font-medium">{subject.completed}/{subject.sessions} completed</span>
+                                  </div>
+                                  <div className="w-full bg-secondary rounded-full h-2">
+                                    <div
+                                      className="bg-primary h-2 rounded-full transition-all duration-500 ease-out"
+                                      style={{ width: `${subject.completionRate}%` }}
+                                    />
+                                  </div>
                                 </div>
                               </div>
                             ))}
-                            {sortedSubjects.length === 0 && (
-                              <p className="text-center text-muted-foreground py-8">
-                                No session data available
-                              </p>
-                            )}
                           </div>
                         );
                       })()}
@@ -1245,61 +1244,78 @@ export default function StudyPlanPage() {
                     <CardContent>
                       {(() => {
                         const now = new Date();
-                                                 const recentSessions = validSessions
-                           .sort((a, b) => new Date(b.startTime) - new Date(a.startTime))
-                           .slice(0, 5);
-                        
+                        const recentSessions = validSessions
+                          .sort((a, b) => new Date(b.startTime) - new Date(a.startTime))
+                          .slice(0, 6);
+
+                        if (recentSessions.length === 0) {
+                          return (
+                            <div className="text-center py-8 text-muted-foreground">
+                              <Activity className="h-10 w-10 mx-auto mb-3 opacity-50" />
+                              <p className="font-medium">No recent activity</p>
+                              <p className="text-sm">Start a study session to see it here</p>
+                            </div>
+                          );
+                        }
+
                         return (
                           <div className="space-y-3">
                             {recentSessions.map((session, index) => {
-                              const startTime = new Date(session.startTime);
-                              const endTime = session.endTime ? new Date(session.endTime) : null;
-                              const duration = endTime ? getDuration(startTime, endTime) : '';
-                              const isCompleted = session.progress === 100 || session.status === 'completed';
-                              const isPast = startTime < now;
-                              
+                              const sessionDate = new Date(session.startTime);
+                              const isUpcoming = sessionDate > now;
+                              const isToday = sessionDate.toDateString() === now.toDateString();
+
+                              const getStatusInfo = () => {
+                                if (session.status === 'completed') {
+                                  return {
+                                    icon: <CheckCircle2 className="h-4 w-4" />,
+                                    color: "text-green-600",
+                                    bgColor: "bg-green-50 dark:bg-green-900/20",
+                                    label: "Completed"
+                                  };
+                                } else if (session.status === 'in-progress') {
+                                  return {
+                                    icon: <Play className="h-4 w-4" />,
+                                    color: "text-blue-600",
+                                    bgColor: "bg-blue-50 dark:bg-blue-900/20",
+                                    label: "In Progress"
+                                  };
+                                } else {
+                                  return {
+                                    icon: <CalendarLucide className="h-4 w-4" />,
+                                    color: "text-gray-600",
+                                    bgColor: "bg-gray-50 dark:bg-gray-900/20",
+                                    label: isUpcoming ? "Upcoming" : "Scheduled"
+                                  };
+                                }
+                              };
+
+                              const statusInfo = getStatusInfo();
+
                               return (
-                                <div key={session._id || index} className="p-3 bg-muted/30 rounded-lg">
-                                  <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                      <h4 className="font-medium text-sm">{session.subject}</h4>
-                                      <p className="text-xs text-muted-foreground">
-                                        {startTime.toLocaleDateString()} • {startTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                        {duration && ` • ${duration}`}
-                                      </p>
-                                    </div>
-                                    <div className={`px-2 py-1 rounded-full text-xs ${
-                                      isCompleted 
-                                        ? 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
-                                        : isPast
-                                        ? 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
-                                        : 'bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400'
-                                    }`}>
-                                      {isCompleted ? 'Completed' : isPast ? 'Missed' : 'Upcoming'}
+                                <div key={session._id || index} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:shadow-sm transition-all">
+                                  <div className={`p-2 rounded-lg ${statusInfo.bgColor}`}>
+                                    <div className={statusInfo.color}>{statusInfo.icon}</div>
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium truncate">{session.subject}</p>
+                                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                      <span>{isToday ? 'Today' : sessionDate.toLocaleDateString()}</span>
+                                      <span>•</span>
+                                      <span>{session.progress}% complete</span>
                                     </div>
                                   </div>
-                                  {session.progress !== undefined && session.progress !== 100 && (
-                                    <div className="mt-2">
-                                      <div className="flex justify-between text-xs text-muted-foreground mb-1">
-                                        <span>Progress</span>
-                                        <span>{session.progress}%</span>
-                                      </div>
-                                      <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                        <div 
-                                          className="bg-primary h-1.5 rounded-full transition-all duration-300"
-                                          style={{ width: `${session.progress}%` }}
-                                        />
-                                      </div>
-                                    </div>
-                                  )}
+                                  <div className="flex flex-col items-end gap-1">
+                                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusInfo.bgColor} ${statusInfo.color}`}>
+                                      {statusInfo.label}
+                                    </span>
+                                    <span className="text-xs text-muted-foreground">
+                                      {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                    </span>
+                                  </div>
                                 </div>
                               );
                             })}
-                            {recentSessions.length === 0 && (
-                              <p className="text-center text-muted-foreground py-8">
-                                No recent sessions
-                              </p>
-                            )}
                           </div>
                         );
                       })()}
@@ -1321,82 +1337,101 @@ export default function StudyPlanPage() {
                     const now = new Date();
                     const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
                     const weeklyData = weekDays.map(day => ({ day, hours: 0, sessions: 0 }));
-                    
-                                         // Calculate weekly study hours
-                     validSessions.forEach(session => {
-                      
+
+                    // Calculate weekly study hours
+                    validSessions.forEach(session => {
                       const sessionDate = new Date(session.startTime);
                       const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-                      
-                      if (sessionDate >= weekAgo) {
+
+                      if (sessionDate >= weekAgo && sessionDate <= now) {
                         const dayIndex = sessionDate.getDay();
                         const start = new Date(session.startTime);
                         const end = new Date(session.endTime);
                         const hours = (end - start) / (1000 * 60 * 60);
-                        
+
                         weeklyData[dayIndex].hours += hours;
                         weeklyData[dayIndex].sessions += 1;
                       }
                     });
-                    
-                    const maxHours = Math.max(...weeklyData.map(d => d.hours));
-                    
+
+                    const maxHours = Math.max(...weeklyData.map(d => d.hours), 1);
+                    const totalWeeklyHours = weeklyData.reduce((sum, day) => sum + day.hours, 0);
+                    const totalWeeklySessions = weeklyData.reduce((sum, day) => sum + day.sessions, 0);
+                    const avgSessionLength = totalWeeklySessions > 0 ? totalWeeklyHours / totalWeeklySessions : 0;
+
                     return (
-                      <div className="space-y-4">
-                        <div className="grid grid-cols-7 gap-2">
-                          {weeklyData.map((day, index) => (
-                            <div key={day.day} className="text-center">
-                              <div className="text-xs text-muted-foreground mb-2">{day.day}</div>
-                              <div className="relative h-24 bg-muted/30 rounded-lg flex flex-col justify-end p-2">
-                                <div 
-                                  className="bg-primary rounded-t-sm transition-all duration-500"
-                                  style={{ 
-                                    height: maxHours > 0 ? `${(day.hours / maxHours) * 100}%` : '0%',
-                                    minHeight: day.hours > 0 ? '4px' : '0px'
-                                  }}
-                                />
-                                <div className="text-xs font-medium mt-1">
-                                  {day.hours > 0 ? `${day.hours.toFixed(1)}h` : '-'}
-                                </div>
-                                <div className="text-xs text-muted-foreground">
-                                  {day.sessions} {day.sessions === 1 ? 'session' : 'sessions'}
+                      <div className="space-y-6">
+                        {/* Weekly Chart */}
+                        <div>
+                          <h4 className="font-medium mb-4">This Week's Activity</h4>
+                          <div className="grid grid-cols-7 gap-2">
+                            {weeklyData.map((day) => (
+                              <div key={day.day} className="text-center">
+                                <div className="text-xs font-medium text-muted-foreground mb-2">{day.day}</div>
+                                <div className="relative h-32 bg-secondary/30 rounded-lg flex flex-col justify-end p-2 group hover:bg-secondary/50 transition-colors">
+                                  <div
+                                    className="bg-primary rounded-t-sm transition-all duration-700 ease-out"
+                                    style={{
+                                      height: `${(day.hours / maxHours) * 100}%`,
+                                      minHeight: day.hours > 0 ? '8px' : '0px'
+                                    }}
+                                  />
+                                  <div className="mt-2 space-y-1">
+                                    <div className="text-xs font-semibold">
+                                      {day.hours > 0 ? `${day.hours.toFixed(1)}h` : '0h'}
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                      {day.sessions} {day.sessions === 1 ? 'session' : 'sessions'}
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
-                            </div>
-                          ))}
+                            ))}
+                          </div>
                         </div>
-                        
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-                          {(() => {
-                            const totalWeeklyHours = weeklyData.reduce((sum, day) => sum + day.hours, 0);
-                            const totalWeeklySessions = weeklyData.reduce((sum, day) => sum + day.sessions, 0);
-                            const avgSessionLength = totalWeeklySessions > 0 ? totalWeeklyHours / totalWeeklySessions : 0;
-                            
-                            return [
-                              {
-                                title: "Weekly Total",
-                                value: `${totalWeeklyHours.toFixed(1)}h`,
-                                subtitle: "Study time this week"
-                              },
-                              {
-                                title: "Daily Average",
-                                value: `${(totalWeeklyHours / 7).toFixed(1)}h`,
-                                subtitle: "Average per day"
-                              },
-                              {
-                                title: "Session Length",
-                                value: `${avgSessionLength.toFixed(1)}h`,
-                                subtitle: "Average session duration"
-                              }
-                            ];
-                          })().map((stat, index) => (
-                            <div key={index} className="text-center p-4 bg-muted/30 rounded-lg">
-                              <p className="text-sm font-medium text-muted-foreground">{stat.title}</p>
-                              <p className="text-2xl font-bold">{stat.value}</p>
-                              <p className="text-xs text-muted-foreground">{stat.subtitle}</p>
-                            </div>
-                          ))}
+
+                        {/* Summary Stats */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div className="text-center p-4 bg-secondary/20 rounded-lg">
+                            <div className="text-2xl font-bold text-primary">{totalWeeklyHours.toFixed(1)}h</div>
+                            <div className="text-sm font-medium text-muted-foreground">Weekly Total</div>
+                            <div className="text-xs text-muted-foreground mt-1">Study time this week</div>
+                          </div>
+                          <div className="text-center p-4 bg-secondary/20 rounded-lg">
+                            <div className="text-2xl font-bold text-primary">{(totalWeeklyHours / 7).toFixed(1)}h</div>
+                            <div className="text-sm font-medium text-muted-foreground">Daily Average</div>
+                            <div className="text-xs text-muted-foreground mt-1">Average per day</div>
+                          </div>
+                          <div className="text-center p-4 bg-secondary/20 rounded-lg">
+                            <div className="text-2xl font-bold text-primary">{avgSessionLength.toFixed(1)}h</div>
+                            <div className="text-sm font-medium text-muted-foreground">Avg Session</div>
+                            <div className="text-xs text-muted-foreground mt-1">Average duration</div>
+                          </div>
                         </div>
+
+                        {/* Additional Insights */}
+                        {totalWeeklySessions > 0 && (
+                          <div className="p-4 bg-primary/5 rounded-lg border border-primary/10">
+                            <div className="flex items-start gap-3">
+                              <TrendingUp className="h-5 w-5 text-primary mt-0.5" />
+                              <div>
+                                <h5 className="font-medium text-sm">Weekly Insights</h5>
+                                <p className="text-sm text-muted-foreground mt-1">
+                                  {(() => {
+                                    const mostActiveDay = weeklyData.reduce((max, day) =>
+                                      day.hours > max.hours ? day : max
+                                    );
+
+                                    if (mostActiveDay.hours > 0) {
+                                      return `Your most productive day was ${mostActiveDay.day} with ${mostActiveDay.hours.toFixed(1)} hours of study time.`;
+                                    }
+                                    return "Start studying to see your weekly insights here.";
+                                  })()}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     );
                   })()}
