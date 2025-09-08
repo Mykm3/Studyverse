@@ -15,18 +15,48 @@ const os = require('os');
 function showCurrentNetworkInfo() {
     console.log('\n🌐 Network Interface Information:');
     console.log('================================');
-    
+
     const interfaces = os.networkInterfaces();
-    
+
+    // Helper function to categorize IP addresses
+    const categorizeIP = (ip) => {
+        const parts = ip.split('.').map(Number);
+
+        if (parts[0] === 10) return '✅ Valid LAN (Class A)';
+        if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return '✅ Valid LAN (Class B)';
+        if (parts[0] === 192 && parts[1] === 168) return '✅ Valid LAN (Class C)';
+        if (parts[0] === 26) return '❌ VPN/Virtual (avoid)';
+        if (parts[0] === 169 && parts[1] === 254) return '❌ Link-local (avoid)';
+        if (parts[0] === 127) return '🏠 Loopback';
+
+        return '⚠️  Unknown range';
+    };
+
+    let recommendedIP = null;
+
     for (const [name, addresses] of Object.entries(interfaces)) {
         console.log(`\n📡 ${name}:`);
         addresses.forEach(addr => {
             if (addr.family === 'IPv4') {
                 const status = addr.internal ? '🏠 Internal' : '🌍 External';
-                console.log(`   ${status}: ${addr.address}`);
+                const category = categorizeIP(addr.address);
+                console.log(`   ${status}: ${addr.address} - ${category}`);
+
+                // Recommend the first valid LAN IP we find
+                if (!recommendedIP && !addr.internal && category.startsWith('✅')) {
+                    recommendedIP = addr.address;
+                }
             }
         });
     }
+
+    if (recommendedIP) {
+        console.log(`\n🎯 Recommended IP for mobile connection: ${recommendedIP}`);
+        console.log(`   Use this command: node update-ip.js ${recommendedIP}`);
+    } else {
+        console.log('\n⚠️  No valid LAN IP found. Check your network connection.');
+    }
+
     console.log('\n');
 }
 

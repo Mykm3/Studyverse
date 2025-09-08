@@ -22,24 +22,92 @@ class IPMonitor {
     getLocalIP() {
         const interfaces = os.networkInterfaces();
 
-        // Priority order: Ethernet, WiFi, then others
-        const priorityOrder = ['Ethernet', 'Wi-Fi', 'WiFi', 'wlan0', 'eth0'];
+        // Helper function to check if IP is in a valid LAN range
+        const isValidLanIP = (ip) => {
+            // Valid private IP ranges:
+            // 10.0.0.0 - 10.255.255.255 (Class A)
+            // 172.16.0.0 - 172.31.255.255 (Class B)
+            // 192.168.0.0 - 192.168.255.255 (Class C)
 
-        for (const priority of priorityOrder) {
-            const networkInterface = interfaces[priority];
-            if (networkInterface) {
-                for (const netInterface of networkInterface) {
-                    if (netInterface.family === 'IPv4' && !netInterface.internal) {
-                        return netInterface.address;
+            const parts = ip.split('.').map(Number);
+
+            // Class A: 10.x.x.x
+            if (parts[0] === 10) return true;
+
+            // Class B: 172.16.x.x - 172.31.x.x
+            if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
+
+            // Class C: 192.168.x.x
+            if (parts[0] === 192 && parts[1] === 168) return true;
+
+            // Reject problematic ranges
+            // 26.x.x.x (often VPN/virtual adapters)
+            if (parts[0] === 26) return false;
+
+            // 169.254.x.x (APIPA/link-local)
+            if (parts[0] === 169 && parts[1] === 254) return false;
+
+            return false;
+        };
+
+        // Collect all valid IPs with priority scoring
+        const validIPs = [];
+
+        for (const [name, addresses] of Object.entries(interfaces)) {
+            for (const netInterface of addresses) {
+                if (netInterface.family === 'IPv4' && !netInterface.internal) {
+                    const ip = netInterface.address;
+                    if (isValidLanIP(ip)) {
+                        // Prioritize real network interfaces over virtual ones
+                        const isVirtual = name.toLowerCase().includes('vmware') ||
+                                        name.toLowerCase().includes('virtualbox') ||
+                                        name.toLowerCase().includes('hyper-v');
+                        const isWiFi = name.toLowerCase().includes('wi-fi') ||
+                                     name.toLowerCase().includes('wifi') ||
+                                     name.toLowerCase().includes('wireless');
+                        const isEthernet = name.toLowerCase().includes('ethernet');
+
+                        const priority = isWiFi ? 1 : (isEthernet ? 2 : (isVirtual ? 4 : 3));
+
+                        validIPs.push({ ip, name, priority, isVirtual, isWiFi, isEthernet });
+                    } else {
+                        console.log(`⚠️  Skipping ${name}: ${ip} (not in valid LAN range)`);
                     }
                 }
             }
         }
 
-        // Fallback: find any non-internal IPv4 address
+        // Sort by priority and return the best one
+        if (validIPs.length > 0) {
+            validIPs.sort((a, b) => a.priority - b.priority);
+            const best = validIPs[0];
+            const networkType = best.isWiFi ? '📶 WiFi' : (best.isEthernet ? '🔌 Ethernet' : (best.isVirtual ? '💻 Virtual' : '🌐 Network'));
+            console.log(`✅ Selected ${best.name} interface: ${best.ip} ${networkType}`);
+            return best.ip;
+        }
+
+        // Second pass: Look for any valid LAN IP in any interface
+        console.log('🔍 Searching all interfaces for valid LAN IP...');
+        for (const [name, addresses] of Object.entries(interfaces)) {
+            for (const netInterface of addresses) {
+                if (netInterface.family === 'IPv4' && !netInterface.internal) {
+                    const ip = netInterface.address;
+                    if (isValidLanIP(ip)) {
+                        console.log(`✅ Found valid LAN IP on ${name}: ${ip}`);
+                        return ip;
+                    } else {
+                        console.log(`⚠️  Skipping ${name}: ${ip} (not in valid LAN range)`);
+                    }
+                }
+            }
+        }
+
+        // Last resort: any non-internal IPv4 (but warn about it)
+        console.log('⚠️  No valid LAN IP found, using fallback...');
         for (const name of Object.keys(interfaces)) {
             for (const netInterface of interfaces[name]) {
                 if (netInterface.family === 'IPv4' && !netInterface.internal) {
+                    console.log(`⚠️  Using fallback IP from ${name}: ${netInterface.address}`);
                     return netInterface.address;
                 }
             }

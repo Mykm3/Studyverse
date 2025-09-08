@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "../components/ui/Button"
-import { CalendarIcon, Plus, ChevronLeft, ChevronRight, PieChart, ListChecks, Play, BarChart, Clock, Search, Filter, Book, Sparkles, TrendingUp, BarChart3, CheckCircle2, Calendar as CalendarLucide, Target, Award, Activity, BookOpen, Timer, Brain, Zap } from "lucide-react"
+import { CalendarIcon, Plus, ChevronLeft, ChevronRight, PieChart, Play, BarChart, Clock, Search, Filter, Book, Sparkles, TrendingUp, BarChart3, CheckCircle2, Calendar as CalendarLucide, Target, Award, Activity, BookOpen, Timer, Brain, Zap } from "lucide-react"
 import StudyCalendar from "../components/StudyCalendar"
 import UpcomingSessions from "../components/UpcomingSessions"
 import Calendar from "../components/Calendar";
@@ -1098,7 +1098,7 @@ export default function StudyPlanPage() {
                     {
                       title: "Total Sessions",
                       value: totalSessions,
-                      icon: <BarChart className="h-5 w-5" />,
+                      icon: <CalendarLucide className="h-5 w-5" />,
                       color: "text-blue-600",
                       bgColor: "bg-blue-50 dark:bg-blue-900/20"
                     },
@@ -1106,7 +1106,7 @@ export default function StudyPlanPage() {
                       title: "Completed",
                       value: completedSessions,
                       subtitle: `${completionRate}% rate`,
-                      icon: <ListChecks className="h-5 w-5" />,
+                      icon: <CheckCircle2 className="h-5 w-5" />,
                       color: "text-green-600",
                       bgColor: "bg-green-50 dark:bg-green-900/20"
                     },
@@ -1114,7 +1114,7 @@ export default function StudyPlanPage() {
                       title: "Weekly Hours",
                       value: `${weeklyStudyTime.toFixed(1)}h`,
                       subtitle: "This week",
-                      icon: <Clock className="h-5 w-5" />,
+                      icon: <Timer className="h-5 w-5" />,
                       color: "text-purple-600",
                       bgColor: "bg-purple-50 dark:bg-purple-900/20"
                     },
@@ -1122,7 +1122,7 @@ export default function StudyPlanPage() {
                       title: "Total Study Time",
                       value: `${totalStudyTime.toFixed(1)}h`,
                       subtitle: "All time",
-                      icon: <BarChart className="h-5 w-5" />,
+                      icon: <Brain className="h-5 w-5" />,
                       color: "text-orange-600",
                       bgColor: "bg-orange-50 dark:bg-orange-900/20"
                     }
@@ -1264,27 +1264,22 @@ export default function StudyPlanPage() {
                               const sessionDate = new Date(session.startTime);
                               const isUpcoming = sessionDate > now;
                               const isToday = sessionDate.toDateString() === now.toDateString();
+                              const subjectColor = subjectColorMap[session.subject] || generateColorFromString(session.subject);
 
                               const getStatusInfo = () => {
                                 if (session.status === 'completed') {
                                   return {
                                     icon: <CheckCircle2 className="h-4 w-4" />,
-                                    color: "text-green-600",
-                                    bgColor: "bg-green-50 dark:bg-green-900/20",
                                     label: "Completed"
                                   };
                                 } else if (session.status === 'in-progress') {
                                   return {
                                     icon: <Play className="h-4 w-4" />,
-                                    color: "text-blue-600",
-                                    bgColor: "bg-blue-50 dark:bg-blue-900/20",
                                     label: "In Progress"
                                   };
                                 } else {
                                   return {
                                     icon: <CalendarLucide className="h-4 w-4" />,
-                                    color: "text-gray-600",
-                                    bgColor: "bg-gray-50 dark:bg-gray-900/20",
                                     label: isUpcoming ? "Upcoming" : "Scheduled"
                                   };
                                 }
@@ -1294,9 +1289,14 @@ export default function StudyPlanPage() {
 
                               return (
                                 <div key={session._id || index} className="flex items-center gap-3 p-3 rounded-lg border bg-card hover:shadow-sm transition-all">
-                                  <div className={`p-2 rounded-lg ${statusInfo.bgColor}`}>
-                                    <div className={statusInfo.color}>{statusInfo.icon}</div>
+                                  {/* Subject Color Circle */}
+                                  <div
+                                    className="h-10 w-10 rounded-full flex items-center justify-center text-white font-semibold text-sm"
+                                    style={{ backgroundColor: subjectColor }}
+                                  >
+                                    {session.subject.charAt(0).toUpperCase()}
                                   </div>
+
                                   <div className="flex-1 min-w-0">
                                     <p className="font-medium truncate">{session.subject}</p>
                                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -1305,10 +1305,22 @@ export default function StudyPlanPage() {
                                       <span>{session.progress}% complete</span>
                                     </div>
                                   </div>
+
                                   <div className="flex flex-col items-end gap-1">
-                                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${statusInfo.bgColor} ${statusInfo.color}`}>
-                                      {statusInfo.label}
-                                    </span>
+                                    <div className="flex items-center gap-1">
+                                      <div style={{ color: subjectColor }}>
+                                        {statusInfo.icon}
+                                      </div>
+                                      <span
+                                        className="text-xs px-2 py-1 rounded-full font-medium"
+                                        style={{
+                                          backgroundColor: `${subjectColor}15`,
+                                          color: subjectColor
+                                        }}
+                                      >
+                                        {statusInfo.label}
+                                      </span>
+                                    </div>
                                     <span className="text-xs text-muted-foreground">
                                       {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                     </span>

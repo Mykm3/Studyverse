@@ -5,7 +5,7 @@ const auth = require('../middleware/auth');
 
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const GROQ_API_URL = 'https://api.groq.com/openai/v1/chat/completions';
-const MODEL = 'llama3-70b-8192';
+const MODEL = 'llama-3.3-70b-versatile';
 
 // Debug logging for Groq configuration
 console.log('Groq configuration:');
@@ -705,7 +705,7 @@ WEEKDAY PRIORITIZATION: When all 7 days are selected but sessions are limited (â
       plan,
       message: 'Study plan generated successfully',
       services: {
-        primary: 'Groq Llama3-70B'
+        primary: 'Groq Llama-3.3-70B Versatile'
       }
     });
 

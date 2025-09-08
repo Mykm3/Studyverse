@@ -1,0 +1,430 @@
+@startuml Studyverse_Use_Case_Diagram
+left to right direction
+skinparam actorStyle awesome
+
+actor Student as S
+
+rectangle "Studyverse System" {
+  usecase "Register/Login (JWT)" as UC_AUTH
+  usecase "Create/Update Study Plan" as UC_PLAN
+  usecase "Upload Notes (Web)" as UC_UPLOAD
+  usecase "AI Summarization" as UC_SUM
+  usecase "AI Quiz Generation" as UC_QUIZ
+  usecase "View Schedule (Web/Mobile)" as UC_VIEW
+  usecase "Mark Session Complete" as UC_MARK
+  usecase "Receive Notifications (Mobile)" as UC_NOTIF
+  usecase "Track Progress / Analytics" as UC_TRACK
+  usecase "View PDF Documents (Web)" as UC_PDF
+  usecase "AI Chat Assistant" as UC_CHAT
+  usecase "Password Reset" as UC_RESET
+}
+
+S --> UC_AUTH
+S --> UC_PLAN
+S --> UC_UPLOAD
+S --> UC_SUM
+S --> UC_QUIZ
+S --> UC_VIEW
+S --> UC_MARK
+S --> UC_NOTIF
+S --> UC_TRACK
+S --> UC_PDF
+S --> UC_CHAT
+S --> UC_RESET
+
+UC_UPLOAD .u.> UC_SUM : <<include>>
+UC_UPLOAD .u.> UC_QUIZ : <<include>>
+UC_PLAN .u.> UC_NOTIF : <<include>>
+
+note right of UC_PDF
+PDF viewing only available on web
+Mobile app shows document list only
+end note
+
+note right of UC_AUTH
+Custom JWT authentication
+Email/password + Google OAuth
+end note
+@enduml
+
+@startuml Studyverse_JWT_Authentication_Sequence
+autonumber
+actor User
+participant "Web/Mobile Client" as Client
+participant "API Server\n(Node/Express)" as API
+database "MongoDB" as DB
+collections "JWT Issuer" as JWT
+
+User -> Client : Enter credentials (email + password)
+Client -> API : POST /auth/login {email, password}
+API -> DB : User.findOne({email})
+DB --> API : user + password_hash
+API -> API : user.comparePassword(password)
+API -> JWT : jwt.sign(payload, JWT_SECRET, {expiresIn: '24h'})
+JWT --> API : JWT token
+API -> DB : Update last_login
+API --> Client : 200 {token, user}
+
+== Authenticated Request ==
+Client -> API : GET /sessions (Authorization: Bearer <JWT>)
+API -> JWT : jwt.verify(token, JWT_SECRET)
+JWT --> API : payload (id, email, displayName)
+API -> DB : StudyPlan.findOne({userId: payload.id})
+DB --> API : studyPlan with sessions
+API --> Client : 200 sessions[]
+
+== Google OAuth (Web) ==
+User -> Client : Click "Sign in with Google"
+Client -> API : GET /auth/google
+API -> API : passport.authenticate('google')
+API --> Client : Redirect to Google OAuth
+User -> Client : Complete Google OAuth
+Client -> API : GET /auth/google/callback
+API -> DB : User.findOne({googleId}) or create new user
+API -> JWT : generateToken(user)
+API --> Client : Redirect with JWT token
+
+== Mobile Development Auth ==
+User -> Client : Development login
+Client -> API : POST /auth/mobile/development {user}
+API -> DB : User.findOne({email}) or create
+API -> JWT : generateToken(user)
+API --> Client : 200 {token, user, refreshToken}
+@enduml
+
+@startuml Studyverse_Schedule_Creation_AI_Pipeline
+autonumber
+actor Student
+participant "Web Client" as Web
+participant "API Server" as API
+database "MongoDB" as DB
+participant "Groq AI Service" as AI
+
+Student -> Web : Input subjects, constraints, preferences
+Web -> API : POST /groq/studyplan {subjects, weeks, preference, sessionLength}
+API -> API : Validate constraints & capacity
+API -> AI : Generate study schedule with detailed prompt
+AI --> API : JSON schedule with weeks/sessions
+API -> API : Validate AI response (subjects, dates, distribution)
+API -> DB : StudyPlan.findOne({userId}) or create new
+API -> DB : Update sessions array
+DB --> API : Updated studyPlan
+API --> Web : 201 {plan, success: true}
+
+== Notes Upload ==
+Student -> Web : Upload PDF/Slides
+Web -> API : POST /notes/upload (multipart)
+API -> API : Upload to Supabase Storage
+API -> DB : Note.create({userId, subject, title, fileUrl})
+DB --> API : noteId, fileUrl
+API --> Web : 200 {noteId, fileUrl, publicUrl}
+
+== AI Summarization ==
+Web -> API : POST /groq/summary {text}
+API -> AI : Summarize academic content
+AI --> API : Summary text
+API --> Web : 200 {choices: [{message: {content: summary}}]}
+
+== AI Quiz Generation ==
+Web -> API : POST /groq/quiz {text}
+API -> AI : Generate multiple-choice quiz
+AI --> API : JSON quiz array
+API --> Web : 200 {choices: [{message: {content: quiz}}]}
+
+== AI Chat Assistant ==
+Web -> API : POST /groq/chat {messages}
+API -> AI : Process chat conversation
+AI --> API : Chat response
+API --> Web : 200 {choices: [{message: {content: response}}]}
+@enduml
+
+@startuml Studyverse_Mobile_Notifications_Sequence
+autonumber
+participant "API Server" as API
+database "MongoDB" as DB
+participant "Push Service\n(Expo/FCM)" as Push
+participant "Mobile App" as Mobile
+actor Student as S
+
+== Device Registration ==
+Mobile -> API : POST /devices {deviceToken} (if implemented)
+API -> DB : UPSERT deviceToken for userId
+DB --> API : ok
+
+== Session Scheduling ==
+API -> DB : StudyPlan.findOne({userId})
+API -> DB : Check for upcoming sessions
+API -> DB : INSERT notifications (if implemented)
+
+== Session Completion ==
+S -> Mobile : Mark session complete
+Mobile -> API : PUT /sessions/{id} {progress: 100}
+API -> DB : Update session status & progress
+DB --> API : Updated session
+API --> Mobile : 200 {session}
+
+== In-App Sync ==
+S -> Mobile : Open app
+Mobile -> API : GET /sessions (Bearer JWT)
+API -> DB : StudyPlan.findOne({userId})
+DB --> API : studyPlan with sessions
+API --> Mobile : sessions[]
+
+== Document Management (Mobile) ==
+S -> Mobile : View documents
+Mobile -> API : GET /notes (Bearer JWT)
+API -> DB : Note.find({userId})
+DB --> API : notes[]
+API --> Mobile : notes[] (no PDF viewing)
+@enduml
+
+@startuml Studyverse_Component_Architecture
+skinparam componentStyle rectangle
+
+package "Clients" {
+  [Web App (React + Vite)] as Web
+  [Mobile App (React Native/Expo)] as Mobile
+}
+
+package "Backend Layer" {
+  [API Server (Node/Express)] as Server
+  [JWT Authentication] as JWT
+  [Passport.js (Google OAuth)] as Passport
+  [Multer (File Upload)] as Multer
+}
+
+package "Data & Storage" {
+  [MongoDB (Mongoose)] as MongoDB
+  [Supabase Storage] as Supabase
+  [Groq AI APIs] as GROQ
+}
+
+package "External Services" {
+  [Google OAuth] as Google
+  [Email Service] as Email
+  [Push Notifications\n(Expo/FCM)] as PUSH
+}
+
+Web --> Server : HTTPS REST API
+Mobile --> Server : HTTPS REST API
+Server --> JWT : sign/verify tokens
+Server --> Passport : Google OAuth
+Server --> Multer : File processing
+Server --> MongoDB : CRUD operations
+Server --> Supabase : File storage
+Server --> GROQ : AI services
+Server --> Google : OAuth verification
+Server --> Email : Password reset
+Server --> PUSH : Notifications
+
+note bottom of Mobile
+No PDF viewing capability
+JWT-based authentication only
+end note
+
+note bottom of Web
+Full PDF viewing with PDF.js Express
+Google OAuth + Email/Password auth
+end note
+@enduml
+
+@startuml Studyverse_Deployment_Topology
+node "User Device" {
+  component "Browser (Chrome/Firefox/Safari)" as Browser
+  component "Mobile App (iOS/Android)" as Mobile
+}
+
+node "Frontend Hosting" {
+  component "Studyverse Web (Vite/React)" as WebApp
+}
+
+node "API Server (Node/Express)" {
+  component "Auth Controller\n(JWT + Google OAuth)"
+  component "Study Sessions Controller"
+  component "Notes Controller\n(File Upload)"
+  component "Groq AI Integration"
+  component "Email Service"
+}
+
+node "Database Layer" {
+  database "MongoDB Atlas" as MongoDB
+  storage "Supabase Storage" as Supabase
+}
+
+node "AI Provider" {
+  component "Groq Llama3-70B API"
+}
+
+node "External Services" {
+  component "Google OAuth"
+  component "Email Service\n(Nodemailer)"
+  component "Push Notifications\n(Expo/FCM)"
+}
+
+Browser --> WebApp : HTTPS
+Browser --> "API Server (Node/Express)" : HTTPS
+Mobile --> "API Server (Node/Express)" : HTTPS
+"API Server (Node/Express)" --> MongoDB
+"API Server (Node/Express)" --> Supabase
+"API Server (Node/Express)" --> "Groq Llama3-70B API"
+"API Server (Node/Express)" --> "Google OAuth"
+"API Server (Node/Express)" --> "Email Service\n(Nodemailer)"
+"API Server (Node/Express)" --> "Push Notifications\n(Expo/FCM)"
+@enduml
+
+@startuml Studyverse_Database_Schema
+skinparam classAttributeIconSize 0
+
+class User {
+  + _id: ObjectId [PK]
+  + email: String [unique]
+  + password: String [hashed]
+  + googleId: String [unique, sparse]
+  + displayName: String
+  + photoUrl: String
+  + preferences_theme: String
+  + preferences_notifications_email: Boolean
+  + preferences_notifications_push: Boolean
+  + resetToken: String
+  + resetTokenExpire: Date
+  + createdAt: Date
+  + updatedAt: Date
+}
+
+class StudyPlan {
+  + _id: ObjectId [PK]
+  + userId: ObjectId [FK -> User._id]
+  + title: String
+  + description: String
+  + weeklyGoal: Number
+  + subjects: [String]
+  + sessions: [StudySession]
+  + createdAt: Date
+  + updatedAt: Date
+}
+
+class StudySession {
+  + _id: ObjectId [PK]
+  + subject: String
+  + startTime: Date
+  + endTime: Date
+  + description: String
+  + status: String [scheduled,completed,cancelled]
+  + progress: Number [0-100]
+  + isAIGenerated: Boolean
+  + documentId: ObjectId [FK -> Note._id]
+}
+
+class Note {
+  + _id: ObjectId [PK]
+  + userId: ObjectId [FK -> User._id]
+  + subject: String
+  + title: String
+  + fileName: String
+  + fileUrl: String
+  + publicUrl: String
+  + uploadDate: Date
+  + createdAt: Date
+  + updatedAt: Date
+}
+
+User "1" -- "0..*" StudyPlan
+User "1" -- "0..*" Note
+StudyPlan "1" -- "1..*" StudySession
+StudySession "0..1" -- "0..1" Note
+
+note right of User
+Supports both email/password
+and Google OAuth authentication
+end note
+
+note right of StudySession
+Embedded in StudyPlan document
+No separate collection
+end note
+
+note right of Note
+Files stored in Supabase Storage
+publicUrl for direct access
+end note
+@enduml
+
+@startuml Studyverse_Session_Completion_Activity
+start
+:Open Mobile/Web App;
+:Select Study Session;
+if (Authenticated?) then (yes)
+  :PATCH /sessions/{id} {progress: 100};
+  :Update session status to 'completed';
+  :Update progress to 100%;
+  :Calculate study statistics;
+  :Return updated session data;
+  :Update UI with completion status;
+else (no)
+  :Redirect to Login (JWT);
+  :Authenticate user;
+  :Retry session completion;
+endif
+:Display success message;
+:Update progress tracking;
+stop
+@enduml
+
+@startuml Studyverse_File_Upload_Flow
+start
+:User selects file (PDF/Slides);
+:Client validates file type & size;
+if (File valid?) then (yes)
+  :POST /notes/upload (multipart);
+  :Server validates authentication;
+  if (Authenticated?) then (yes)
+    :Process file with Multer;
+    :Upload to Supabase Storage;
+    if (Upload successful?) then (yes)
+      :Create Note document in MongoDB;
+      :Store metadata & URLs;
+      :Return success response;
+      :Update UI with new document;
+    else (no)
+      :Return upload error;
+      :Display error message;
+    endif
+  else (no)
+    :Return 401 Unauthorized;
+    :Redirect to login;
+  endif
+else (no)
+  :Display file validation error;
+endif
+stop
+@enduml
+
+@startuml Studyverse_AI_Integration_Flow
+start
+:User uploads document;
+:Document stored in Supabase;
+:User requests AI processing;
+if (Processing type?) then (Summary)
+  :POST /groq/summary {text};
+  :Truncate text to 8000 words;
+  :Send to Groq Llama3-70B;
+  :Return academic summary;
+elseif (Quiz) then
+  :POST /groq/quiz {text};
+  :Truncate text to 6000 words;
+  :Generate multiple-choice quiz;
+  :Return JSON quiz array;
+elseif (Chat) then
+  :POST /groq/chat {messages};
+  :Process conversation;
+  :Return AI response;
+elseif (Study Plan) then
+  :POST /groq/studyplan {constraints};
+  :Validate session capacity;
+  :Generate personalized schedule;
+  :Validate AI response;
+  :Save to MongoDB;
+endif
+:Display results to user;
+stop
+@enduml
