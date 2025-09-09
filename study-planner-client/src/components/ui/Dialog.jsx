@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
-const Dialog = ({ open, onOpenChange, children }) => {
+const Dialog = ({ open, onOpenChange, children, size = "md" }) => {
   // Lock body scroll when modal is open
   useEffect(() => {
     if (open) {
@@ -25,27 +25,25 @@ const Dialog = ({ open, onOpenChange, children }) => {
 
   if (!open) return null;
 
+  // Define size classes
+  const sizeClasses = {
+    sm: "max-w-sm",
+    md: "max-w-md",
+    lg: "max-w-lg",
+    xl: "max-w-xl",
+    "2xl": "max-w-2xl",
+    "3xl": "max-w-3xl"
+  };
+
   // Render modal at document.body level to avoid parent container issues
   return createPortal(
-    <div 
-      className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center cursor-pointer p-4"
-      style={{
-        position: 'fixed',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        width: '100vw',
-        height: '100vh',
-        minHeight: '100vh',
-        zIndex: 9999
-      }}
+    <div
+      className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center p-4"
       onClick={() => onOpenChange(false)}
     >
       {/* Modal content - prevent click through */}
-      <div 
-        className="relative bg-white rounded-lg shadow-lg w-full cursor-default"
-        style={{ maxWidth: '500px' }}
+      <div
+        className={`relative bg-white rounded-lg shadow-lg w-full ${sizeClasses[size]} cursor-default`}
         onClick={(e) => e.stopPropagation()}
       >
         {children}
@@ -57,7 +55,7 @@ const Dialog = ({ open, onOpenChange, children }) => {
 
 const DialogContent = ({ children, className = "" }) => {
   return (
-    <div className={`bg-white rounded-lg shadow-lg p-6 max-h-[90vh] overflow-y-auto ${className}`}>
+    <div className={`p-6 max-h-[90vh] overflow-y-auto ${className}`}>
       {children}
     </div>
   );

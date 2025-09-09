@@ -12,6 +12,7 @@ const groqRoutes = require('./routes/groq');
 const aiRoutes = require('./routes/ai');
 const geminiStudyPlanRoutes = require('./routes/gemini-studyplan');
 const sessionDataRoutes = require('./routes/sessionData');
+const sharedPlansRoutes = require('./routes/sharedPlans');
 
 // Import IP Monitor for real-time IP detection
 const IPMonitor = require('./ip-monitor');
@@ -232,6 +233,9 @@ console.log('Mounting AI routes at /api/ai (DISABLED)');
 
 console.log('Mounting session data routes at /api/session-data');
 app.use('/api/session-data', sessionDataRoutes);
+
+console.log('Mounting shared plans routes at /api/shared-plans');
+app.use('/api/shared-plans', sharedPlansRoutes);
 
 // Protected route example
 app.get("/api/protected", (req, res) => {

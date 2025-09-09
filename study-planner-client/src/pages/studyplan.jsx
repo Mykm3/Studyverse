@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "../components/ui/Button"
-import { CalendarIcon, Plus, ChevronLeft, ChevronRight, PieChart, Play, BarChart, Clock, Filter, Book, Sparkles, TrendingUp, BarChart3, CheckCircle2, Calendar as CalendarLucide, Target, Award, Activity, BookOpen, Timer, Brain, Zap } from "lucide-react"
+import { CalendarIcon, Plus, ChevronLeft, ChevronRight, PieChart, Play, BarChart, Clock, Filter, Book, Sparkles, TrendingUp, BarChart3, CheckCircle2, Calendar as CalendarLucide, Target, Award, Activity, BookOpen, Timer, Brain, Zap, Share2, Users } from "lucide-react"
 import StudyCalendar from "../components/StudyCalendar"
 import UpcomingSessions from "../components/UpcomingSessions"
 import Calendar from "../components/Calendar";
@@ -13,6 +13,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card"
 
 import { useSubjects } from "../contexts/SubjectContext";
 import { PlanModal } from "../components/PlanModal";
+import { SharePlanModal } from "../components/SharePlanModal";
+import { ShareCodeModal } from "../components/ShareCodeModal";
 import api from "../utils/api";
 
 // Fixed color palette for subjects
@@ -86,6 +88,12 @@ export default function StudyPlanPage() {
   const [showPlanModal, setShowPlanModal] = useState(false);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [isCreatingImmediateSession, setIsCreatingImmediateSession] = useState(false);
+
+  // State for sharing functionality
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [shareData, setShareData] = useState(null);
+  const [generatedSessions, setGeneratedSessions] = useState([]);
+  const [showShareCodeModal, setShowShareCodeModal] = useState(false);
   const [planForm, setPlanForm] = useState({
     preferredTimes: '',
     preferredDays: '',
@@ -449,10 +457,13 @@ export default function StudyPlanPage() {
           // Also refresh from backend to ensure consistency
           console.log('Refreshing sessions from backend...');
           await fetchSessions();
-          
+
+          // Store generated sessions for sharing
+          setGeneratedSessions(savedSessions);
+
           toast({
             title: "Study Plan Generated!",
-            description: `Successfully created ${newSessions.length} study sessions for ${formData.subjects.length} subjects.`,
+            description: `Successfully created ${newSessions.length} study sessions for ${formData.subjects.length} subjects. Use the 'Share Plan' button to share with others!`,
           });
         } catch (saveError) {
           console.error('Failed to save sessions:', saveError);
@@ -508,6 +519,33 @@ export default function StudyPlanPage() {
     }
   };
 
+  // Share plan functionality
+  const handleCreateShare = async () => {
+    try {
+      const response = await api.post('/api/shared-plans/create', {
+        title: 'My Study Plan',
+        description: 'AI-generated study schedule',
+        sessions: generatedSessions.length > 0 ? generatedSessions : sessions
+      });
+
+      if (response.success) {
+        setShareData(response);
+        toast({
+          title: "Share Link Created!",
+          description: "Your study plan is now shareable",
+        });
+      }
+    } catch (error) {
+      console.error('Error creating share:', error);
+      throw error;
+    }
+  };
+
+  const handleCloseShareModal = () => {
+    setShowShareModal(false);
+    setShareData(null);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -561,7 +599,23 @@ export default function StudyPlanPage() {
               <Plus className="mr-2 h-4 w-4" />
               New Study Session
             </Button>
-            <Button 
+            <Button
+              variant="outline"
+              onClick={() => setShowShareCodeModal(true)}
+            >
+              <Users className="mr-2 h-4 w-4" />
+              Join Plan
+            </Button>
+            {sessions.length > 0 && (
+              <Button
+                variant="outline"
+                onClick={() => setShowShareModal(true)}
+              >
+                <Share2 className="mr-2 h-4 w-4" />
+                Share Plan
+              </Button>
+            )}
+            <Button
               variant="gradient"
               onClick={handleOpenPlanModal}
               className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
@@ -1423,11 +1477,25 @@ export default function StudyPlanPage() {
       </main>
       
       {/* AI-Powered Plan Modal */}
-      <PlanModal 
+      <PlanModal
         open={showPlanModal}
         onClose={handleClosePlanModal}
         onSubmit={handleGenerateAIPlan}
         isLoading={isGeneratingPlan}
+      />
+
+      {/* Share Plan Modal */}
+      <SharePlanModal
+        isOpen={showShareModal}
+        onClose={handleCloseShareModal}
+        shareData={shareData}
+        onCreateShare={handleCreateShare}
+      />
+
+      {/* Share Code Modal */}
+      <ShareCodeModal
+        isOpen={showShareCodeModal}
+        onClose={() => setShowShareCodeModal(false)}
       />
     </div>
   )

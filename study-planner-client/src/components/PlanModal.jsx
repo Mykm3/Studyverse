@@ -221,8 +221,8 @@ export function PlanModal({ open, onClose, onSubmit, isLoading = false }) {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto">
+    <Dialog open={open} onOpenChange={onClose} size="lg">
+      <DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Generate AI Study Plan</DialogTitle>
           <DialogDescription>

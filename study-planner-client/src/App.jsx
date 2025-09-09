@@ -18,6 +18,7 @@ import { SubjectProvider } from "@/contexts/SubjectContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import AddSession from './pages/AddSession';
 import EditSession from './pages/EditSession';
+import SharedPlan from './pages/SharedPlan';
 import TestUploadPage from './pages/test-upload';
 import { useState, useEffect } from 'react';
 import { useToast } from "./lib/toast";
@@ -73,6 +74,9 @@ function App() {
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password/:token" element={<ResetPassword />} />
             <Route path="/auth/callback" element={<AuthCallback />} />
+
+            {/* Shared plan route - public access */}
+            <Route path="/shared-plan/:shareId" element={<SharedPlan />} />
 
             {/* Protected routes */}
             <Route

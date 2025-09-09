@@ -98,8 +98,8 @@ export default function FileSelectionModal({ open, onClose, subject, onSelectFil
   };
 
   return (
-    <Dialog open={open} onOpenChange={onClose}>
-      <DialogContent className="w-full max-w-3xl p-0">
+    <Dialog open={open} onOpenChange={onClose} size="3xl">
+      <DialogContent className="p-0">
         <div className="p-6">
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-2xl font-bold">

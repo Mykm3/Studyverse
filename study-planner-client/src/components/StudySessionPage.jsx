@@ -644,10 +644,20 @@ export function StudySessionPage() {
 
   // Enhanced finish session logic with early completion options
   const handleFinishSession = () => {
+    // Check if timer has been started (either has startTime or progress > 0)
+    if (!timer.startTime && timer.progress === 0) {
+      toast({
+        title: "Timer Not Started",
+        description: "Please start the timer before marking the session as complete.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     const now = new Date();
     const sessionEndTime = new Date(session.startTime);
     sessionEndTime.setMinutes(sessionEndTime.getMinutes() + session.duration);
-    
+
     const isEarly = now < sessionEndTime;
     const timeLeft = Math.max(0, sessionEndTime.getTime() - now.getTime());
     const minutesLeft = Math.ceil(timeLeft / (1000 * 60));
@@ -662,15 +672,25 @@ export function StudySessionPage() {
   }
 
   const markSessionAsComplete = async () => {
+    // Check if timer has been started (either has startTime or progress > 0)
+    if (!timer.startTime && timer.progress === 0) {
+      toast({
+        title: "Timer Not Started",
+        description: "Please start the timer before marking the session as complete.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const sessionId = session.id || session._id;
       if (sessionId) {
         console.log('Marking session as complete:', sessionId);
         console.log('Current session data:', session);
-        
-        const requestBody = { progress: 100 };
+
+        const requestBody = { progress: 100, status: 'completed' };
         console.log('Sending request body:', requestBody);
-        
+
         const response = await fetch(`${API_BASE_URL}/api/study-sessions/${sessionId}`, {
           method: 'PUT',
           headers: {
@@ -679,21 +699,21 @@ export function StudySessionPage() {
           },
           body: JSON.stringify(requestBody)
         });
-        
+
         if (!response.ok) {
           const errorText = await response.text();
           throw new Error(`HTTP ${response.status}: ${response.statusText} - ${errorText}`);
         }
-        
+
         const updatedSession = await response.json();
         console.log('Session updated successfully:', updatedSession);
       }
-      
+
       toast({
         title: "Session Completed!",
         description: "Your study session has been marked as complete.",
       });
-      
+
       // Navigate back to Study Plan
       navigate('/study-plan');
     } catch (err) {
@@ -1522,7 +1542,7 @@ export function StudySessionPage() {
 
       {/* Early Finish Modal */}
       <Dialog open={showEarlyFinishModal} onOpenChange={setShowEarlyFinishModal}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Clock className="h-5 w-5 text-amber-500" />
