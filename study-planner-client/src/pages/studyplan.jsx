@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Button } from "../components/ui/Button"
-import { CalendarIcon, Plus, ChevronLeft, ChevronRight, PieChart, Play, BarChart, Clock, Search, Filter, Book, Sparkles, TrendingUp, BarChart3, CheckCircle2, Calendar as CalendarLucide, Target, Award, Activity, BookOpen, Timer, Brain, Zap } from "lucide-react"
+import { CalendarIcon, Plus, ChevronLeft, ChevronRight, PieChart, Play, BarChart, Clock, Filter, Book, Sparkles, TrendingUp, BarChart3, CheckCircle2, Calendar as CalendarLucide, Target, Award, Activity, BookOpen, Timer, Brain, Zap } from "lucide-react"
 import StudyCalendar from "../components/StudyCalendar"
 import UpcomingSessions from "../components/UpcomingSessions"
 import Calendar from "../components/Calendar";
@@ -10,7 +10,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/Tabs"
 import StudyPlan from "../components/StudyPlan";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/Card";
-import { Input } from "../components/ui/Input";
+
 import { useSubjects } from "../contexts/SubjectContext";
 import { PlanModal } from "../components/PlanModal";
 import api from "../utils/api";
@@ -77,7 +77,6 @@ export default function StudyPlanPage() {
   }, [location.search]);
   
   // State for the enhanced view tab
-  const [searchQuery, setSearchQuery] = useState("");
   const [subjectFilter, setSubjectFilter] = useState("all");
   const [sessionTypeFilter, setSessionTypeFilter] = useState("upcoming");
   
@@ -111,16 +110,10 @@ export default function StudyPlanPage() {
         (sessionTypeFilter === "completed" && !isUpcoming) ||
         sessionTypeFilter === "all";
       
-      // Filter by search query (subject or description)
-      const matchesSearch =
-        !searchQuery ||
-        (session.subject && session.subject.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        (session.description && session.description.toLowerCase().includes(searchQuery.toLowerCase()));
-      
       // Filter by subject
       const matchesSubject = subjectFilter === "all" || session.subject === subjectFilter;
-      
-      return matchesType && matchesSearch && matchesSubject;
+
+      return matchesType && matchesSubject;
     });
   };
 
@@ -554,8 +547,8 @@ export default function StudyPlanPage() {
       className="h-screen"
       style={{ backgroundColor: "var(--background-color)", color: "var(--foreground-color)" }}
     >
-      <main className="flex-1 overflow-auto p-6 space-y-6">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+      <main className="flex-1 overflow-auto p-6 space-y-1">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-1">
           <div>
             <h1 className="text-2xl font-bold flex items-center">
               <CalendarIcon className="mr-2 h-6 w-6 text-primary" />
@@ -580,7 +573,7 @@ export default function StudyPlanPage() {
         </div>
 
         <Tabs defaultValue="plan" value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-6 w-full justify-start">
+          <TabsList className="mb-4 w-full justify-start">
             <TabsTrigger value="plan" className="flex items-center gap-1">
               <CalendarIcon className="h-4 w-4" />
               Plan <span className="text-xs text-muted-foreground ml-1">(calendar)</span>
@@ -596,33 +589,8 @@ export default function StudyPlanPage() {
           </TabsList>
 
           {/* Plan Tab Content */}
-          <TabsContent value="plan" className="mt-0">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center">
-                {/* Removing the duplicated month navigation here */}
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="relative hidden md:block w-64">
-                  <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search sessions..."
-                    className="pl-8"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-                <Button variant="outline" size="sm">
-                  Today
-                </Button>
-                <Button variant="outline" size="sm">
-                  Week
-                </Button>
-                <Button variant="outline" size="sm" className="bg-primary/10">
-                  Month
-                </Button>
-                
-              </div>
-            </div>
+          <TabsContent value="plan">
+
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2">
@@ -739,7 +707,7 @@ export default function StudyPlanPage() {
           </TabsContent>
 
           {/* Launch Tab Content */}
-          <TabsContent value="launch" className="mt-0">
+          <TabsContent value="launch">
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-6">
                 <div className="bg-card rounded-lg shadow p-6">
@@ -1054,7 +1022,7 @@ export default function StudyPlanPage() {
           </TabsContent>
 
           {/* Review Tab Content */}
-          <TabsContent value="review" className="mt-0">
+          <TabsContent value="review">
             <div className="space-y-6">
               {/* Summary Cards */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">

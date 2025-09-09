@@ -107,21 +107,21 @@ export default function PDFViewerReact({
       </div>
       
       {/* PDF Viewer Content */}
-      <div className="relative flex-1 overflow-auto">
+      <div className="relative flex-1 overflow-auto max-h-full">
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
             <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
           </div>
         )}
-        
+
         {error && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 z-10">
             <div className="bg-red-100 dark:bg-red-900/20 p-6 rounded-lg max-w-md text-center">
               <HelpCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
               <p className="text-muted-foreground mb-2">{error}</p>
               {onDownload && (
-                <Button 
-                  size="sm" 
+                <Button
+                  size="sm"
                   onClick={onDownload}
                   className="mx-auto"
                 >
@@ -132,31 +132,34 @@ export default function PDFViewerReact({
             </div>
           </div>
         )}
-        
-        <div className="flex flex-col items-center">
-          <Document
-            file={fileUrl}
-            onLoadSuccess={onDocumentLoadSuccess}
-            onLoadError={onDocumentLoadError}
-            loading={
-              <div className="flex items-center justify-center h-40">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-              </div>
-            }
-            error={
-              <div className="flex flex-col items-center justify-center p-4">
-                <HelpCircle className="h-8 w-8 text-red-500 mb-2" />
-                <p className="text-center text-muted-foreground">Failed to load PDF</p>
-              </div>
-            }
-          >
-            <Page 
-              pageNumber={pageNumber} 
-              scale={scale}
-              renderTextLayer={true}
-              renderAnnotationLayer={true}
-            />
-          </Document>
+
+        <div className="flex flex-col items-center h-full">
+          <div className="flex-1 flex items-center justify-center overflow-auto">
+            <Document
+              file={fileUrl}
+              onLoadSuccess={onDocumentLoadSuccess}
+              onLoadError={onDocumentLoadError}
+              loading={
+                <div className="flex items-center justify-center h-40">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                </div>
+              }
+              error={
+                <div className="flex flex-col items-center justify-center p-4">
+                  <HelpCircle className="h-8 w-8 text-red-500 mb-2" />
+                  <p className="text-center text-muted-foreground">Failed to load PDF</p>
+                </div>
+              }
+            >
+              <Page
+                pageNumber={pageNumber}
+                scale={scale}
+                renderTextLayer={true}
+                renderAnnotationLayer={true}
+                width={Math.min(window.innerWidth * 0.4, 800)}
+              />
+            </Document>
+          </div>
           
           {numPages && (
             <div className="flex items-center justify-center gap-4 py-2 bg-muted/50 w-full">

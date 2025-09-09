@@ -139,8 +139,8 @@ const Calendar = ({ events, onDateSelect }) => {
 
   return (
     <div className={`transition-all duration-500 ${animate ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-10'}`}>
-      <div className="mb-6 bg-card shadow-md rounded-lg p-4">
-        <div className="flex flex-wrap justify-between items-center mb-4">
+      <div className="mb-3 bg-card shadow-md rounded-lg p-4">
+        <div className="flex flex-wrap justify-between items-center mb-3">
           <div className="flex items-center">
             <CalendarIcon className="mr-2 h-5 w-5 text-primary" />
             <h2 className="text-xl font-bold text-gradient">{formatCurrentDate()}</h2>
@@ -174,7 +174,7 @@ const Calendar = ({ events, onDateSelect }) => {
           </div>
         </div>
         
-        <div className="flex flex-wrap gap-2 mb-4">
+        <div className="flex flex-wrap gap-2 mb-2">
           <Button 
             variant={selectedView === 'dayGridMonth' ? 'gradient' : 'outline'}
             size="sm"

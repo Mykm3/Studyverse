@@ -2,22 +2,25 @@
 
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Brain, ArrowLeft, Maximize2, Minimize2, BookOpen, HelpCircle, BrainCircuit, Sparkles, Clock, Download, Book, ChevronLeft, ChevronRight, CheckCircle } from 'lucide-react'
+import { Brain, ArrowLeft, Maximize2, Minimize2, BookOpen, HelpCircle, BrainCircuit, Sparkles, Clock, Download, Book, ChevronLeft, ChevronRight, CheckCircle, FileText, MessageSquare, BarChart3, Zap, Target, Timer } from 'lucide-react'
 import { Button } from "./ui/Button"
 import { useToast } from "./ui/use-toast"
 import { SessionTimer } from "./SessionTimer"
 import { SessionProgress } from "./SessionProgress"
-import { Card, CardContent } from "./ui/Card"
+import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "./ui/Tabs"
 import { Input } from "./ui/Input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "./ui/Dialog"
+import { Badge } from "./ui/Badge"
 import axios from "axios"
 import PDFViewerReact from "./PDFViewerReact"
 import DocumentViewer from "./DocumentViewer"
+import { usePersistentTimer } from "../hooks/usePersistentTimer"
 
 import { jsonrepair } from "jsonrepair";
 import { marked } from "marked";
 import api from "@/utils/api";
+import sessionDataApi from "../utils/sessionDataApi";
 import { extractTextFromPDF } from "@/utils/pdfTextExtractor";
 
 // API base URL
@@ -54,12 +57,13 @@ export function StudySessionPage() {
     endTime: null
   })
   const [isFullscreen, setIsFullscreen] = useState(false)
-  const [activeTime, setActiveTime] = useState(0)
-  const [isTimerRunning, setIsTimerRunning] = useState(false)
   const [currentPage, setCurrentPage] = useState(session.document.currentPage)
   const [highlights, setHighlights] = useState([])
   const [notes, setNotes] = useState("")
   const [isSessionComplete, setIsSessionComplete] = useState(false)
+
+  // Initialize persistent timer
+  const timer = usePersistentTimer(session.id, session.duration)
   const [activeTab, setActiveTab] = useState("chat")
   const [inputValue, setInputValue] = useState("")
   const [messages, setMessages] = useState([
@@ -84,19 +88,145 @@ export function StudySessionPage() {
   const [documents, setDocuments] = useState([]); // All docs for session
   const [currentDocumentIndex, setCurrentDocumentIndex] = useState(0);
   const [showEarlyFinishModal, setShowEarlyFinishModal] = useState(false);
-  
+  const [conversationLoaded, setConversationLoaded] = useState(false);
+
   // We keep iframe loading/error states for compatibility with existing code
   // but the actual PDF viewing is handled by the PDFViewerReact component
 
   // Clean up when component unmounts
   useEffect(() => {
     return () => {
-      // Clean up timer
-      if (isTimerRunning) {
-        pauseSession();
-      }
+      // Timer cleanup is handled by the persistent timer hook
+      // No need to manually clean up here
     };
-  }, [isTimerRunning]);
+  }, []);
+
+  // ==================== PERSISTENT CONVERSATION FUNCTIONS ====================
+
+  // Load conversation history for the current session
+  const loadConversationHistory = async (sessionId, subject, documentId) => {
+    if (!sessionId || sessionId === "") {
+      console.log('No session ID provided, skipping conversation load');
+      return;
+    }
+
+    // Allow reloading if conversation was already loaded (for document switching)
+    if (conversationLoaded) {
+      console.log('Conversation already loaded, skipping...');
+      return;
+    }
+
+    try {
+      console.log('🔄 Loading conversation history for session:', sessionId);
+      console.log('   Subject:', subject);
+      console.log('   Document ID:', documentId);
+
+      const conversationData = await sessionDataApi.conversation.getConversation(sessionId);
+      console.log('📥 Conversation API response:', conversationData);
+
+      if (conversationData.messages && conversationData.messages.length > 0) {
+        console.log('✅ Loaded', conversationData.messages.length, 'messages from database');
+        // Only load messages if we don't already have messages (to avoid overriding AI functionality)
+        if (messages.length <= 1) { // Only default message exists
+          setMessages(conversationData.messages);
+        } else {
+          console.log('📝 Messages already exist, not overriding current conversation');
+        }
+      } else {
+        console.log('📝 No existing conversation found in database');
+        // Don't create default message here - let the existing AI functionality handle it
+      }
+
+      setConversationLoaded(true);
+    } catch (error) {
+      console.error('❌ Error loading conversation history:', error);
+      console.error('Error details:', error.response?.data || error.message);
+
+      // Fall back to default message on error
+      setMessages([{
+        role: "assistant",
+        content: `Hello! I'm your AI study assistant. How can I help you with your document?`,
+        timestamp: new Date().toISOString(),
+      }]);
+      setConversationLoaded(true);
+    }
+  };
+
+  // Save conversation to database (debounced)
+  const saveConversationToDatabase = sessionDataApi.utils.createDebouncedSave(
+    async (sessionId, messages, subject, documentId) => {
+      try {
+        if (!sessionId || !messages || messages.length === 0) return;
+
+        console.log('Saving conversation with', messages.length, 'messages');
+        await sessionDataApi.conversation.saveConversation(sessionId, messages, subject, documentId);
+      } catch (error) {
+        console.error('Error saving conversation:', error);
+      }
+    },
+    3000 // Save after 3 seconds of inactivity
+  );
+
+  // Load summary for the current session
+  const loadSummary = async (sessionId) => {
+    if (!sessionId || sessionId === "") {
+      console.log('No session ID provided, skipping summary load');
+      return;
+    }
+
+    try {
+      console.log('🔄 Loading summary for session:', sessionId);
+      const summaryData = await sessionDataApi.summary.getSummary(sessionId);
+      console.log('📥 Summary API response:', summaryData);
+
+      if (summaryData.summary) {
+        console.log('✅ Loaded existing summary from database');
+        // Only load summary if we don't already have one (to avoid overriding user's current work)
+        if (!summary || summary.trim() === '') {
+          setSummary(summaryData.summary);
+        } else {
+          console.log('📝 Summary already exists, not overriding current summary');
+        }
+      } else {
+        console.log('📝 No existing summary found');
+      }
+    } catch (error) {
+      console.error('❌ Error loading summary:', error);
+      console.error('Error details:', error.response?.data || error.message);
+    }
+  };
+
+  // Load quiz for the current session
+  const loadQuiz = async (sessionId) => {
+    if (!sessionId || sessionId === "") {
+      console.log('No session ID provided, skipping quiz load');
+      return;
+    }
+
+    try {
+      console.log('🔄 Loading quiz for session:', sessionId);
+      const quizData = await sessionDataApi.quiz.getQuiz(sessionId);
+      console.log('📥 Quiz API response:', quizData);
+
+      if (quizData.questions && quizData.questions.length > 0) {
+        console.log('✅ Loaded existing quiz from database');
+        // Only load quiz if we don't already have one (to avoid overriding user's current work)
+        if (!quiz || quiz.length === 0) {
+          setQuiz(quizData.questions);
+          setUserAnswers(quizData.userAnswers || []);
+          setQuizScore(quizData.score || null);
+          setShowQuizResults(quizData.completed || false);
+        } else {
+          console.log('📝 Quiz already exists, not overriding current quiz');
+        }
+      } else {
+        console.log('📝 No existing quiz found');
+      }
+    } catch (error) {
+      console.error('❌ Error loading quiz:', error);
+      console.error('Error details:', error.response?.data || error.message);
+    }
+  };
 
   // Force using the view-pdf endpoint for all PDFs - moved to component top level
   useEffect(() => {
@@ -160,12 +290,10 @@ export function StudySessionPage() {
   // Clean up when component unmounts
   useEffect(() => {
     return () => {
-      // Clean up timer
-      if (isTimerRunning) {
-        pauseSession();
-      }
+      // Timer cleanup is handled by the persistent timer hook
+      // No need to manually clean up here
     };
-  }, [isTimerRunning]);
+  }, []);
 
   // Auto-extract PDF text when fileUrl is set
   useEffect(() => {
@@ -243,13 +371,14 @@ export function StudySessionPage() {
             }
           }));
           setCurrentDocumentIndex(0);
-          setMessages([
-            {
-              role: "assistant",
-              content: `Hello! I'm your AI study assistant. How can I help you with "${document.title}"?`,
-              timestamp: new Date().toISOString(),
-            }
-          ]);
+
+          // Load conversation history instead of resetting messages
+          const sessionId = sessionData._id || sessionData.id;
+          console.log('🔄 Loading session data after document fetch, sessionId:', sessionId);
+
+          await loadConversationHistory(sessionId, sessionData.subject, document.id);
+          await loadSummary(sessionId);
+          await loadQuiz(sessionId);
           toast({
             title: "Document Loaded",
             description: `"${document.title}" has been successfully loaded.`,
@@ -294,7 +423,7 @@ export function StudySessionPage() {
       });
     } finally {
       setIsLoading(false);
-      startSession();
+      // Timer will be started manually by user
     }
   };
 
@@ -343,14 +472,13 @@ export function StudySessionPage() {
         }
       }));
 
-      // Update messages to include the document title
-      setMessages([
-        {
-          role: "assistant",
-          content: `Hello! I'm your AI study assistant. How can I help you with "${document.title}"?`,
-          timestamp: new Date().toISOString(),
-        }
-      ]);
+      // Load conversation history for this session and document
+      const sessionId = sessionData._id || sessionData.id;
+      console.log('🔄 Loading session data after specific document fetch, sessionId:', sessionId);
+
+      await loadConversationHistory(sessionId, sessionData.subject, document._id);
+      await loadSummary(sessionId);
+      await loadQuiz(sessionId);
 
           // Get the direct URL to the document
     const token = localStorage.getItem('token');
@@ -403,12 +531,12 @@ export function StudySessionPage() {
       });
     } finally {
       setIsLoading(false);
-      startSession();
+      // Timer will be started manually by user
     }
   };
 
   // Add document switching logic
-  const handleSwitchDocument = (direction) => {
+  const handleSwitchDocument = async (direction) => {
     if (!documents.length) return;
     let newIndex = currentDocumentIndex + direction;
     if (newIndex < 0) newIndex = documents.length - 1;
@@ -436,62 +564,71 @@ export function StudySessionPage() {
     }));
     setCurrentDocumentIndex(newIndex);
     setExtractedText(""); // Reset extracted text so it will re-extract
-    setMessages([
-      {
-        role: "assistant",
-        content: `Hello! I'm your AI study assistant. How can I help you with "${document.title}"?`,
-        timestamp: new Date().toISOString(),
-      }
-    ]);
+
+    // Reset conversation loaded state and load history for new document
+    setConversationLoaded(false);
+    await loadConversationHistory(session.id, session.subject, document.id);
     toast({
       title: "Document Loaded",
       description: `"${document.title}" has been successfully loaded.`,
     });
   };
 
-  // Update progress based on active time
+  // Update progress based on timer state
   useEffect(() => {
-    if (session.duration > 0) {
-      const newProgress = Math.min(100, Math.round((activeTime / (session.duration * 60)) * 100))
-      setSession((prev) => ({ ...prev, progress: newProgress }))
+    setSession((prev) => ({
+      ...prev,
+      progress: timer.progress,
+      startTime: timer.startTime || prev.startTime
+    }))
 
-      if (newProgress >= 100 && !isSessionComplete) {
-        completeSession()
+    if (timer.isComplete && !isSessionComplete) {
+      completeSession()
+    }
+  }, [timer.progress, timer.isComplete, timer.startTime, isSessionComplete])
+
+  // Load session data when session ID becomes available
+  useEffect(() => {
+    console.log('🔍 Session data loading effect triggered');
+    console.log('   Session ID:', session.id);
+    console.log('   Session ID type:', typeof session.id);
+    console.log('   Session ID empty?', session.id === "");
+    console.log('   Conversation loaded?', conversationLoaded);
+    console.log('   Session subject:', session.subject);
+    console.log('   Document ID:', session.document?.id);
+
+    if (session.id && session.id !== "" && !conversationLoaded) {
+      console.log('✅ Conditions met, loading session data for:', session.id);
+
+      // Load all persistent data
+      loadConversationHistory(session.id, session.subject, session.document?.id);
+      loadSummary(session.id);
+      loadQuiz(session.id);
+    } else {
+      console.log('❌ Conditions not met for loading session data');
+      if (!session.id || session.id === "") {
+        console.log('   - No session ID or empty session ID');
+      }
+      if (conversationLoaded) {
+        console.log('   - Conversation already loaded');
       }
     }
-  }, [activeTime, session.duration])
+  }, [session.id, session.subject, session.document?.id, conversationLoaded]);
 
-  const startSession = () => {
-    setIsTimerRunning(true)
+  const handleTimerStart = () => {
+    timer.start()
     setSession((prev) => ({
       ...prev,
       startTime: prev.startTime || new Date().toISOString(),
     }))
-
-    toast({
-      title: "Session Started",
-      description: `Your ${session.subject} study session has begun.`,
-    })
   }
 
-  const pauseSession = () => {
-    setIsTimerRunning(false)
-    toast({
-      title: "Session Paused",
-      description: "Your study session has been paused.",
-    })
-  }
-
-  const resumeSession = () => {
-    setIsTimerRunning(true)
-    toast({
-      title: "Session Resumed",
-      description: "Your study session has been resumed.",
-    })
+  const handleTimerComplete = () => {
+    completeSession()
   }
 
   const completeSession = () => {
-    setIsTimerRunning(false)
+    timer.pause() // Stop the timer
     setIsSessionComplete(true)
     setSession((prev) => ({
       ...prev,
@@ -646,16 +783,39 @@ export function StudySessionPage() {
         content: aiContent,
         timestamp: new Date().toISOString(),
       };
-      setMessages((prev) => [...prev, aiResponse]);
+      setMessages((prev) => {
+        const updatedMessages = [...prev, aiResponse];
+
+        // Save conversation to database (debounced)
+        saveConversationToDatabase(
+          session.id,
+          updatedMessages,
+          session.subject,
+          session.document?.id
+        );
+
+        return updatedMessages;
+      });
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content: `AI error: ${err.message}`,
-          timestamp: new Date().toISOString(),
-        },
-      ]);
+      const errorMessage = {
+        role: "assistant",
+        content: `AI error: ${err.message}`,
+        timestamp: new Date().toISOString(),
+      };
+
+      setMessages((prev) => {
+        const updatedMessages = [...prev, errorMessage];
+
+        // Save conversation to database even with error
+        saveConversationToDatabase(
+          session.id,
+          updatedMessages,
+          session.subject,
+          session.document?.id
+        );
+
+        return updatedMessages;
+      });
     } finally {
       setIsGenerating(false);
     }
@@ -670,6 +830,21 @@ export function StudySessionPage() {
       const summaryText = res.choices?.[0]?.message?.content || "[No summary generated]";
       setSummary(summaryText);
       setActiveTab("summary");
+
+      // Save summary to database
+      try {
+        await sessionDataApi.summary.saveSummary(
+          session.id,
+          summaryText,
+          session.subject,
+          session.document?.id,
+          extractedText
+        );
+        console.log('Summary saved to database');
+      } catch (saveError) {
+        console.error('Error saving summary to database:', saveError);
+      }
+
       toast({
         title: "Summary Generated",
         description: "AI has summarized the document content.",
@@ -721,9 +896,27 @@ export function StudySessionPage() {
           quizArr = [];
         }
       }
-      setQuiz(Array.isArray(quizArr) ? quizArr : []);
+      const finalQuiz = Array.isArray(quizArr) ? quizArr : [];
+      setQuiz(finalQuiz);
       resetQuizState();
       setActiveTab("quiz");
+
+      // Save quiz to database if successfully parsed
+      if (parsed && finalQuiz.length > 0) {
+        try {
+          await sessionDataApi.quiz.saveQuiz(
+            session.id,
+            finalQuiz,
+            session.subject,
+            session.document?.id,
+            extractedText
+          );
+          console.log('Quiz saved to database');
+        } catch (saveError) {
+          console.error('Error saving quiz to database:', saveError);
+        }
+      }
+
       toast({
         title: parsed ? "Quiz Generated" : "Quiz Error",
         description: parsed ? "AI has generated a quiz for you." : "Failed to parse quiz. Try again or rephrase your document.",
@@ -757,12 +950,27 @@ export function StudySessionPage() {
     setUserAnswers((prev) => {
       const updated = [...prev];
       updated[qIndex] = oIndex;
+
+      // Auto-save quiz answers (debounced)
+      setTimeout(async () => {
+        try {
+          await sessionDataApi.quiz.updateQuizAnswers(
+            session.id,
+            updated,
+            quizScore,
+            false // not completed yet
+          );
+        } catch (error) {
+          console.error('Error auto-saving quiz answers:', error);
+        }
+      }, 1000);
+
       return updated;
     });
   };
 
   // Handle checking answers
-  const handleCheckAnswers = () => {
+  const handleCheckAnswers = async () => {
     let correct = 0;
     quiz.forEach((q, i) => {
       const userIdx = userAnswers[i];
@@ -770,8 +978,23 @@ export function StudySessionPage() {
         correct++;
       }
     });
-    setQuizScore({ correct, total: quiz.length });
+
+    const score = { correct, total: quiz.length };
+    setQuizScore(score);
     setShowQuizResults(true);
+
+    // Save quiz results to database
+    try {
+      await sessionDataApi.quiz.updateQuizAnswers(
+        session.id,
+        userAnswers,
+        score,
+        true // completed
+      );
+      console.log('Quiz results saved to database');
+    } catch (saveError) {
+      console.error('Error saving quiz results to database:', saveError);
+    }
   };
 
   // Render the document content based on document type
@@ -875,141 +1098,230 @@ export function StudySessionPage() {
   };
 
   return (
-    <div className="container mx-auto p-4">
-      <header className="flex justify-between items-center mb-6 py-4">
-        <div className="flex items-center gap-2">
-          <Clock className="h-8 w-8 text-primary" />
-          {/* Previous button */}
-          {documents.length > 1 && (
-            <Button variant="ghost" size="icon" onClick={() => handleSwitchDocument(-1)}>
-              <ChevronLeft className="h-6 w-6" />
-            </Button>
-          )}
-          <h1 className="text-2xl font-bold">{session.document.title}</h1>
-          {/* Next button */}
-          {documents.length > 1 && (
-            <Button variant="ghost" size="icon" onClick={() => handleSwitchDocument(1)}>
-              <ChevronRight className="h-6 w-6" />
-            </Button>
-          )}
-        </div>
-        <div className="flex items-center gap-4">
-          <Button 
-            variant="outline"
-            size="sm"
-            className="flex gap-2"
-            onClick={() => navigate('/study-plan')}
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back to Study Plan</span>
-          </Button>
-          <Button 
-            variant="default" 
-            size="sm" 
-            className="bg-primary hover:bg-primary/90 text-white px-6 py-2 font-semibold rounded-md shadow"
-            onClick={handleFinishSession}
-          >
-            Finish Session
-          </Button>
-          <Button variant="outline" size="sm" className="flex gap-2" onClick={toggleFullscreen}>
-            {isFullscreen ? (
-              <>
-                <Minimize2 className="h-4 w-4" />
-                <span>Exit Fullscreen</span>
-              </>
-            ) : (
-              <>
-                <Maximize2 className="h-4 w-4" />
-                <span>Fullscreen</span>
-              </>
-            )}
-          </Button>
+    <div className="h-screen max-h-screen overflow-hidden bg-gradient-to-br from-slate-50 to-blue-50/30 flex flex-col study-session-layout">
+      {/* Compact Header */}
+      <header className="bg-white/80 backdrop-blur-sm border-b border-gray-200/50 flex-shrink-0">
+        <div className="px-4 py-1">
+          <div className="flex justify-between items-center">
+            {/* Left Section - Document Navigation */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 bg-primary/10 rounded-md">
+                  <Timer className="h-4 w-4 text-primary" />
+                </div>
+                <div>
+                  <h1 className="text-lg font-bold text-gray-900 flex items-center gap-1">
+                    {documents.length > 1 && (
+                      <Button variant="ghost" size="sm" onClick={() => handleSwitchDocument(-1)}>
+                        <ChevronLeft className="h-3 w-3" />
+                      </Button>
+                    )}
+                    <span className="truncate max-w-xs">{session.document.title}</span>
+                    {documents.length > 1 && (
+                      <Button variant="ghost" size="sm" onClick={() => handleSwitchDocument(1)}>
+                        <ChevronRight className="h-3 w-3" />
+                      </Button>
+                    )}
+                  </h1>
+                  <div className="flex items-center gap-3 text-xs text-gray-600">
+                    <Badge variant="secondary" className="flex items-center gap-1 text-xs py-0">
+                      <BookOpen className="h-2 w-2" />
+                      {session.subject}
+                    </Badge>
+                    {documents.length > 1 && (
+                      <span className="text-xs">
+                        Doc {currentDocumentIndex + 1}/{documents.length}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Right Section - Actions */}
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-gray-600 hover:text-gray-900 text-xs"
+                onClick={() => navigate('/study-plan')}
+              >
+                <ArrowLeft className="h-3 w-3 mr-1" />
+                Back
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={toggleFullscreen}
+                className="hidden md:flex text-xs"
+              >
+                {isFullscreen ? (
+                  <>
+                    <Minimize2 className="h-3 w-3 mr-1" />
+                    Exit
+                  </>
+                ) : (
+                  <>
+                    <Maximize2 className="h-3 w-3 mr-1" />
+                    Full
+                  </>
+                )}
+              </Button>
+
+              <Button
+                onClick={handleFinishSession}
+                size="sm"
+                className="bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary text-white shadow-md hover:shadow-lg transition-all duration-200 text-xs"
+              >
+                <CheckCircle className="h-3 w-3 mr-1" />
+                Finish
+              </Button>
+            </div>
+          </div>
         </div>
       </header>
 
-      <div className="grid grid-cols-12 gap-6 min-h-0 h-[calc(100vh-140px)]">
-        {/* Left Panel - Session Info & Timer */}
-        <div className="col-span-12 md:col-span-2 space-y-4 min-h-0 h-full overflow-hidden">
-          <div className="bg-background rounded-lg shadow-md p-4 h-full flex flex-col min-h-0 overflow-hidden">
-            <h2 className="text-lg font-semibold mb-4">{session.title}</h2>
+      {/* Main Content Area - Fixed Height */}
+      <div className="flex-1 overflow-hidden">
+        <div className="w-full h-full grid grid-cols-12 gap-2 p-2 max-h-full">
+          {/* Left Panel - Session Info & Timer */}
+          <div className="col-span-12 lg:col-span-3 flex flex-col gap-3 h-full overflow-hidden">
+            {/* Compact Session Overview */}
+            <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg flex-shrink-0">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <Target className="h-4 w-4 text-primary" />
+                  <span className="font-medium text-sm">Session</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                  <div className="text-center">
+                    <div className="font-medium">{session.duration}m</div>
+                    <div className="text-gray-500">Duration</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="font-medium">{timer.progress}%</div>
+                    <div className="text-gray-500">Progress</div>
+                  </div>
+                  <div className="text-center">
+                    <div className={`font-medium ${timer.isRunning ? 'text-green-600' : 'text-gray-600'}`}>
+                      {timer.isRunning ? "Active" : timer.progress > 0 ? "Paused" : "Ready"}
+                    </div>
+                    <div className="text-gray-500">Status</div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
 
-            <div className="mb-4">
-              <p className="text-sm text-muted-foreground mb-1">Subject</p>
-              <div className="flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-primary" />
-                <span className="font-medium">{session.subject}</span>
-              </div>
-            </div>
-
-            <SessionTimer
-              duration={session.duration}
-              isRunning={isTimerRunning}
-              activeTime={activeTime}
-              setActiveTime={setActiveTime}
-              onStart={startSession}
-              onPause={pauseSession}
-              onResume={resumeSession}
-              onComplete={completeSession}
-            />
-
-            <div className="mt-auto">
-              <SessionProgress
-                progress={session.progress}
-                currentPage={currentPage}
-                totalPages={session.document.totalPages}
+            {/* Compact Timer */}
+            <div className="flex-1">
+              <SessionTimer
+                duration={session.duration}
+                isRunning={timer.isRunning}
+                activeTime={timer.activeTime}
+                timeLeft={timer.timeLeft}
+                progress={timer.progress}
+                onStart={handleTimerStart}
+                onPause={timer.pause}
+                onReset={timer.reset}
+                onComplete={handleTimerComplete}
+                formatTime={timer.formatTime}
               />
             </div>
+
+            {/* Compact Progress */}
+            <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg flex-shrink-0">
+              <CardContent className="p-2">
+                <SessionProgress
+                  progress={session.progress}
+                  currentPage={currentPage}
+                  totalPages={session.document.totalPages}
+                />
+              </CardContent>
+            </Card>
           </div>
-        </div>
 
-        {/* Center Panel - Document Viewer */}
-        <div className="col-span-12 md:col-span-7 bg-background rounded-lg shadow-md h-full flex flex-col min-h-0 overflow-hidden">
-          <div className="pdf-scroll-area flex-1 min-h-0 overflow-auto">
-            {isLoading || documentError ? (
-              <div className="h-full p-4">
-                {renderDocumentContent()}
-              </div>
-            ) : (
-              <DocumentViewer
-                document={{
-                  ...session.document,
-                  content: renderDocumentContent
-                }}
-                currentPage={currentPage}
-                onPageChange={handlePageChange}
-                highlights={highlights}
-                onAddHighlight={handleAddHighlight}
-                notes={notes}
-                onNotesChange={handleNotesChange}
-                customContent={renderDocumentContent()}
-              />
-            )}
+          {/* Center Panel - Document Viewer */}
+          <div className="col-span-12 lg:col-span-6 h-full max-h-full overflow-hidden">
+            <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg h-full max-h-full flex flex-col overflow-hidden">
+              <CardHeader className="pb-2 flex-shrink-0">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <FileText className="h-4 w-4 text-primary" />
+                  Document Viewer
+                  {extracting && (
+                    <Badge variant="secondary" className="ml-auto text-xs">
+                      <Zap className="h-3 w-3 mr-1" />
+                      Processing...
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 flex-1 min-h-0 overflow-hidden">
+                <div className="pdf-scroll-area h-full max-h-full overflow-auto">
+                  {isLoading || documentError ? (
+                    <div className="h-full p-4 flex items-center justify-center">
+                      {renderDocumentContent()}
+                    </div>
+                  ) : (
+                    <div className="h-full max-h-full overflow-hidden">
+                      <DocumentViewer
+                        document={{
+                          ...session.document,
+                          content: renderDocumentContent
+                        }}
+                        currentPage={currentPage}
+                        onPageChange={handlePageChange}
+                        highlights={highlights}
+                        onAddHighlight={handleAddHighlight}
+                        notes={notes}
+                        onNotesChange={handleNotesChange}
+                        customContent={renderDocumentContent()}
+                      />
+                    </div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </div>
 
-        {/* Right Panel - AI Assistant */}
-        <div className="col-span-12 md:col-span-3 bg-background rounded-lg shadow-md h-full flex flex-col min-h-0 overflow-hidden">
-          <div className="h-full flex flex-col min-h-0 flex-1 overflow-y-auto">
-            <div className="border-b p-4">
-              <h2 className="text-lg font-semibold flex items-center gap-2">
-                <BrainCircuit className="h-5 w-5 text-primary" />
-                StudyVerse AI Assistant
-              </h2>
-            </div>
+          {/* Right Panel - AI Assistant */}
+          <div className="col-span-12 lg:col-span-3 h-full max-h-full overflow-hidden">
+            <Card className="bg-white/70 backdrop-blur-sm border-0 shadow-lg h-full max-h-full flex flex-col overflow-hidden">
+              <CardHeader className="pb-2 flex-shrink-0">
+                <CardTitle className="flex items-center gap-2 text-base">
+                  <BrainCircuit className="h-4 w-4 text-primary" />
+                  AI Assistant
+                  {isGenerating && (
+                    <Badge variant="secondary" className="ml-auto text-xs">
+                      <Sparkles className="h-3 w-3 mr-1 animate-spin" />
+                      Generating...
+                    </Badge>
+                  )}
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0 flex-1 min-h-0 flex flex-col">
+                <Tabs defaultValue="chat" value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col">
+                  <TabsList className="mx-3 mb-2 grid grid-cols-3 text-xs h-8 flex-shrink-0">
+                    <TabsTrigger value="chat" className="flex items-center gap-1 text-xs">
+                      <MessageSquare className="h-3 w-3" />
+                      Chat
+                    </TabsTrigger>
+                    <TabsTrigger value="summary" className="flex items-center gap-1 text-xs">
+                      <FileText className="h-3 w-3" />
+                      Summary
+                    </TabsTrigger>
+                    <TabsTrigger value="quiz" className="flex items-center gap-1 text-xs">
+                      <BarChart3 className="h-3 w-3" />
+                      Quiz
+                    </TabsTrigger>
+                  </TabsList>
 
-            <Tabs defaultValue="chat" value={activeTab} onValueChange={setActiveTab} className="flex-1 flex flex-col min-h-0 overflow-y-auto">
-              <TabsList className="mx-4 mt-2">
-                <TabsTrigger value="chat">Chat</TabsTrigger>
-                <TabsTrigger value="summary">Summary</TabsTrigger>
-                <TabsTrigger value="quiz">Quiz</TabsTrigger>
-              </TabsList>
-
-              <TabsContent value="chat" className="flex-1 flex flex-col p-4 min-h-0 overflow-auto">
-                <div className="flex-1 overflow-auto mb-4 space-y-4 min-h-0">
+              <TabsContent value="chat" className="flex-1 flex flex-col px-3 min-h-0 overflow-hidden">
+                <div className="flex-1 overflow-y-auto space-y-2 min-h-0 ai-assistant-scroll" style={{maxHeight: 'calc(100vh - 400px)'}}>
                   {messages.map((message, index) => (
                     <div key={index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
                       <div
-                        className={`max-w-[80%] rounded-lg p-3 ${
+                        className={`max-w-[85%] rounded-lg p-2 text-xs ${
                           message.role === "user"
                             ? "bg-primary text-white"
                             : "bg-white text-black border border-gray-200"
@@ -1017,11 +1329,11 @@ export function StudySessionPage() {
                       >
                         {message.role === "assistant" ? (
                           <div
-                            className="prose prose-sm max-w-none"
+                            className="prose prose-xs max-w-none text-xs"
                             dangerouslySetInnerHTML={{ __html: marked.parse(message.content || "") }}
                           />
                         ) : (
-                        <p className="text-sm">{message.content}</p>
+                        <p className="text-xs">{message.content}</p>
                         )}
                         <p className="text-xs mt-1 opacity-70">{new Date(message.timestamp).toLocaleTimeString()}</p>
                       </div>
@@ -1029,42 +1341,44 @@ export function StudySessionPage() {
                   ))}
                 </div>
 
-                <form onSubmit={handleSendMessage} className="flex gap-2">
+                <form onSubmit={handleSendMessage} className="flex gap-2 flex-shrink-0 mt-2">
                   <Input
-                    placeholder="Ask a question about the material..."
+                    placeholder="Ask about the document..."
                     value={inputValue}
                     onChange={(e) => setInputValue(e.target.value)}
-                    className="flex-1"
+                    className="flex-1 text-xs h-8"
                   />
-                  <Button type="submit" variant="default">
-                    <ArrowLeft className="h-4 w-4 rotate-180" />
+                  <Button type="submit" variant="default" size="sm" className="h-8 w-8 p-0">
+                    <ArrowLeft className="h-3 w-3 rotate-180" />
                   </Button>
                 </form>
               </TabsContent>
 
-              <TabsContent value="summary" className="flex-1 p-4 overflow-auto">
+              <TabsContent value="summary" className="flex-1 px-3 overflow-y-auto min-h-0 ai-assistant-scroll" style={{maxHeight: 'calc(100vh - 400px)'}}>
                 {summary ? (
-                  <div className="prose max-w-none">
+                  <div className="prose prose-xs max-w-none text-xs">
                     <div dangerouslySetInnerHTML={{ __html: marked.parse(summary.replace(/\n/g, "\n")) }} />
                   </div>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center">
-                    <BookOpen className="h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Generate Summary</h3>
-                    <p className="text-sm text-muted-foreground text-center mb-4">
-                      Get an AI-generated summary of the document content
+                    <BookOpen className="h-8 w-8 text-muted-foreground mb-3" />
+                    <h3 className="text-sm font-medium mb-2">Generate Summary</h3>
+                    <p className="text-xs text-muted-foreground text-center mb-3">
+                      Get an AI summary of the document
                     </p>
                     <Button
                       variant="default"
                       onClick={handleGenerateSummary}
                       disabled={isGenerating}
+                      size="sm"
+                      className="text-xs"
                     >
                       {isGenerating ? (
                         "Generating..."
                       ) : (
                         <>
-                          <Sparkles className="h-4 w-4 mr-2" />
-                          Summarize Content
+                          <Sparkles className="h-3 w-3 mr-1" />
+                          Summarize
                         </>
                       )}
                     </Button>
@@ -1072,19 +1386,21 @@ export function StudySessionPage() {
                 )}
               </TabsContent>
 
-              <TabsContent value="quiz" className="flex-1 p-4 overflow-y-auto min-h-0">
+              <TabsContent value="quiz" className="flex-1 px-3 overflow-y-auto min-h-0 ai-assistant-scroll" style={{maxHeight: 'calc(100vh - 400px)'}}>
                 {quiz.length > 0 ? (
-                  <div className="space-y-6">
-                    <h3 className="text-lg font-medium">Quiz: {session.document.title}</h3>
-                    <p className="text-sm text-muted-foreground">Test your understanding of the material with these questions:</p>
+                  <div className="space-y-3">
+                    <div className="text-center mb-3">
+                      <h3 className="text-sm font-medium">Quiz</h3>
+                      <p className="text-xs text-muted-foreground">Test your understanding</p>
+                    </div>
 
                     {quiz.map((question, qIndex) => (
-                      <Card key={qIndex} className="mt-4">
-                        <CardContent className="p-4">
-                          <p className="font-medium mb-3">
+                      <Card key={qIndex} className="border border-gray-200">
+                        <CardContent className="p-3">
+                          <p className="font-medium mb-2 text-xs">
                             {qIndex + 1}. {question.question}
                           </p>
-                          <div className="space-y-2">
+                          <div className="space-y-1">
                             {question.options.map((option, oIndex) => {
                               const isSelected = userAnswers[qIndex] === oIndex;
                               const isCorrect = showQuizResults && option === question.answer;
@@ -1092,18 +1408,18 @@ export function StudySessionPage() {
                                 showQuizResults && isSelected && option !== question.answer;
                               return (
                               <div key={oIndex} className="flex items-center gap-2">
-                                <input 
-                                  type="radio" 
-                                  id={`q${qIndex}-o${oIndex}`} 
+                                <input
+                                  type="radio"
+                                  id={`q${qIndex}-o${oIndex}`}
                                   name={`question-${qIndex}`}
-                                  className="text-primary focus:ring-primary"
+                                  className="text-primary focus:ring-primary w-3 h-3"
                                     checked={isSelected}
                                     disabled={showQuizResults}
                                     onChange={() => handleSelectAnswer(qIndex, oIndex)}
                                   />
                                   <label
                                     htmlFor={`q${qIndex}-o${oIndex}`}
-                                    className={`text-sm text-foreground ${
+                                    className={`text-xs text-foreground ${
                                       isCorrect
                                         ? "font-bold text-green-600"
                                         : isIncorrect
@@ -1113,10 +1429,10 @@ export function StudySessionPage() {
                                   >
                                   {option}
                                     {isCorrect && (
-                                      <span className="ml-2">✔️</span>
+                                      <span className="ml-1">✔️</span>
                                     )}
                                     {isIncorrect && (
-                                      <span className="ml-2">❌</span>
+                                      <span className="ml-1">❌</span>
                                     )}
                                 </label>
                               </div>
@@ -1124,9 +1440,9 @@ export function StudySessionPage() {
                             })}
                           </div>
                           {showQuizResults && (
-                            <div className="mt-2">
-                              <span className="text-sm font-semibold">
-                                Correct answer: <span className="text-green-600">{question.answer}</span>
+                            <div className="mt-1">
+                              <span className="text-xs font-semibold">
+                                Correct: <span className="text-green-600">{question.answer}</span>
                               </span>
                             </div>
                           )}
@@ -1135,33 +1451,35 @@ export function StudySessionPage() {
                     ))}
                     {/* Show score summary after checking answers */}
                     {showQuizResults && quizScore && (
-                      <div className="text-center mt-4">
-                        <span className="text-lg font-semibold">
+                      <div className="text-center mt-2">
+                        <span className="text-sm font-semibold">
                           Score: {quizScore.correct} / {quizScore.total}
                         </span>
                       </div>
                     )}
-                    <div className="flex justify-end mt-4">
-                      <Button variant="default" onClick={handleCheckAnswers} disabled={showQuizResults}>
+                    <div className="flex justify-center mt-2">
+                      <Button variant="default" onClick={handleCheckAnswers} disabled={showQuizResults} size="sm" className="text-xs">
                         Check Answers
                       </Button>
                     </div>
                   </div>
                 ) : (
                   <div className="h-full flex flex-col items-center justify-center">
-                    <HelpCircle className="h-12 w-12 text-muted-foreground mb-4" />
-                    <h3 className="text-lg font-medium mb-2">Generate Quiz</h3>
-                    <p className="text-sm text-muted-foreground text-center mb-4">Test your knowledge with an AI-generated quiz</p>
+                    <HelpCircle className="h-8 w-8 text-muted-foreground mb-3" />
+                    <h3 className="text-sm font-medium mb-2">Generate Quiz</h3>
+                    <p className="text-xs text-muted-foreground text-center mb-3">Test your knowledge</p>
                     <Button
                       variant="default"
                       onClick={handleGenerateQuiz}
                       disabled={isGenerating}
+                      size="sm"
+                      className="text-xs"
                     >
                       {isGenerating ? (
                         "Generating..."
                       ) : (
                         <>
-                          <Sparkles className="h-4 w-4 mr-2" />
+                          <Sparkles className="h-3 w-3 mr-1" />
                           Generate Quiz
                         </>
                       )}
@@ -1169,30 +1487,35 @@ export function StudySessionPage() {
                   </div>
                 )}
               </TabsContent>
-            </Tabs>
+                </Tabs>
 
-            <div className="border-t p-4">
-              <div className="flex gap-2">
-                <Button
-                  className="flex-1"
-                  variant="outline"
-                  onClick={handleGenerateSummary}
-                  disabled={isGenerating}
-                >
-                  <BookOpen className="h-4 w-4 mr-2" />
-                  Summarize
-                </Button>
-                <Button
-                  className="flex-1"
-                  variant="outline"
-                  onClick={handleGenerateQuiz}
-                  disabled={isGenerating}
-                >
-                  <HelpCircle className="h-4 w-4 mr-2" />
-                  Quiz Me
-                </Button>
-              </div>
-            </div>
+                {/* Quick Actions - Properly positioned at bottom */}
+                <div className="border-t bg-gray-50/50 flex-shrink-0 p-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGenerateSummary}
+                      disabled={isGenerating}
+                      className="text-xs h-7"
+                    >
+                      <BookOpen className="h-3 w-3 mr-1" />
+                      Summary
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleGenerateQuiz}
+                      disabled={isGenerating}
+                      className="text-xs h-7"
+                    >
+                      <HelpCircle className="h-3 w-3 mr-1" />
+                      Quiz
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>

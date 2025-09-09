@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
-import { Play, Pause, RotateCcw } from 'lucide-react'
+import { useState, useEffect } from "react"
+import { Play, Pause, RotateCcw, Clock, Timer, Activity } from 'lucide-react'
 import { Button } from "./ui/Button"
 import { Card, CardContent } from "./ui/Card"
 import { useToast } from "./ui/use-toast"
@@ -11,96 +11,42 @@ import { useToast } from "./ui/use-toast"
  * @property {number} duration - Duration in minutes
  * @property {boolean} isRunning - Whether the timer is currently running
  * @property {number} activeTime - Active time in seconds
- * @property {Function} setActiveTime - Function to update active time
+ * @property {number} timeLeft - Time left in seconds
+ * @property {number} progress - Progress percentage
  * @property {Function} onStart - Function called when timer starts
  * @property {Function} onPause - Function called when timer pauses
- * @property {Function} onResume - Function called when timer resumes
+ * @property {Function} onReset - Function called when timer resets
  * @property {Function} onComplete - Function called when timer completes
+ * @property {Function} formatTime - Function to format time
  */
 
 /**
- * Session Timer Component
+ * Modern Session Timer Component with persistent state
  * @param {SessionTimerProps} props
  */
 export function SessionTimer({
   duration,
   isRunning,
   activeTime,
-  setActiveTime,
+  timeLeft,
+  progress,
   onStart,
   onPause,
-  onResume,
+  onReset,
   onComplete,
+  formatTime,
 }) {
   const { toast } = useToast()
-  const [timeLeft, setTimeLeft] = useState(duration * 60) // convert to seconds
   const [showTimeLeft, setShowTimeLeft] = useState(true) // toggle between time left and time elapsed
-  const timerRef = useRef(null)
-  const lastActivityRef = useRef(Date.now())
-  const activityCheckRef = useRef(null)
-
-  // Format seconds to MM:SS
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`
-  }
-
-  // Check for user activity
-  useEffect(() => {
-    const handleActivity = () => {
-      lastActivityRef.current = Date.now()
-    }
-
-    // Track user activity
-    window.addEventListener("mousemove", handleActivity)
-    window.addEventListener("keydown", handleActivity)
-    window.addEventListener("click", handleActivity)
-    window.addEventListener("scroll", handleActivity)
-
-    return () => {
-      window.removeEventListener("mousemove", handleActivity)
-      window.removeEventListener("keydown", handleActivity)
-      window.removeEventListener("click", handleActivity)
-      window.removeEventListener("scroll", handleActivity)
-    }
-  }, [])
-
-  // Timer logic
-  useEffect(() => {
-    if (isRunning) {
-      timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => Math.max(0, prev - 1))
-      }, 1000)
-
-      // Check for activity every 5 seconds
-      activityCheckRef.current = setInterval(() => {
-        const now = Date.now()
-        const idleTime = now - lastActivityRef.current
-
-        // If user has been active in the last 10 seconds, count it as active time
-        if (idleTime < 10000) {
-          setActiveTime((prev) => prev + 5)
-        }
-      }, 5000)
-    } else {
-      if (timerRef.current) clearInterval(timerRef.current)
-      if (activityCheckRef.current) clearInterval(activityCheckRef.current)
-    }
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
-      if (activityCheckRef.current) clearInterval(activityCheckRef.current)
-    }
-  }, [isRunning, setActiveTime])
+  const [isHovered, setIsHovered] = useState(false)
 
   // Check if timer has reached zero
   useEffect(() => {
     if (timeLeft === 0 && isRunning) {
       onComplete()
       toast({
-        title: "Time's Up!",
-        description: "Your scheduled study time has ended.",
+        title: "🎉 Time's Up!",
+        description: "Your scheduled study time has ended. Great work!",
       })
     }
   }, [timeLeft, isRunning, onComplete, toast])
@@ -110,52 +56,153 @@ export function SessionTimer({
   }
 
   const handleReset = () => {
-    setTimeLeft(duration * 60)
-    setActiveTime(0)
+    onReset()
     toast({
       title: "Timer Reset",
       description: "Your study timer has been reset.",
     })
   }
 
+  const handleStart = () => {
+    onStart()
+    toast({
+      title: "Session Started",
+      description: "Your study session has begun. Stay focused!",
+    })
+  }
+
+  const handlePause = () => {
+    onPause()
+    toast({
+      title: "Session Paused",
+      description: "Take a break. Resume when you're ready!",
+    })
+  }
+
+  // Calculate progress for visual indicators
+  const progressPercentage = Math.min(100, progress)
+  const isNearCompletion = progressPercentage >= 80
+  const isHalfway = progressPercentage >= 50
+
   return (
-    <Card className="border-none shadow-sm">
-      <CardContent className="p-4 flex flex-col items-center">
+    <Card
+      className={`relative overflow-hidden transition-all duration-300 bg-white/70 backdrop-blur-sm border-0 shadow-lg ${
+        isRunning ? 'ring-1 ring-primary/30' : ''
+      } ${isHovered ? 'shadow-md' : ''}`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* Animated progress indicator */}
+      <div
+        className={`absolute top-0 left-0 h-1 bg-gradient-to-r transition-all duration-1000 ${
+          isNearCompletion ? 'from-orange-400 to-red-500' :
+          isHalfway ? 'from-yellow-400 to-orange-500' :
+          'from-primary to-primary/80'
+        }`}
+        style={{ width: `${progressPercentage}%` }}
+      />
+
+      <CardContent className="p-4">
+        {/* Compact Header */}
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full transition-colors duration-300 ${
+              isRunning ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+            }`} />
+            <h3 className="text-xs font-medium text-muted-foreground">
+              {isRunning ? 'Active' : 'Timer'}
+            </h3>
+          </div>
+          <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <Activity className="h-3 w-3" />
+            <span>{progressPercentage}%</span>
+          </div>
+        </div>
+
+        {/* Compact timer display */}
         <div className="text-center mb-4">
-          <h3 className="text-sm font-medium text-muted-foreground mb-1">
-            {showTimeLeft ? "Time Remaining" : "Time Elapsed"}
-          </h3>
-          <div className="text-3xl font-bold cursor-pointer" onClick={handleToggleView}>
+          <div className="flex items-center justify-center gap-1 mb-1">
+            {showTimeLeft ? <Timer className="h-3 w-3 text-muted-foreground" /> : <Clock className="h-3 w-3 text-muted-foreground" />}
+            <span className="text-xs font-medium text-muted-foreground">
+              {showTimeLeft ? "Remaining" : "Elapsed"}
+            </span>
+          </div>
+
+          <div
+            className={`text-2xl font-bold cursor-pointer transition-all duration-300 hover:scale-105 ${
+              isNearCompletion ? 'text-orange-600' :
+              isRunning ? 'text-primary' : 'text-foreground'
+            }`}
+            onClick={handleToggleView}
+          >
             {showTimeLeft ? formatTime(timeLeft) : formatTime(activeTime)}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {showTimeLeft ? `${Math.floor(activeTime / 60)} mins active` : `${Math.floor(timeLeft / 60)} mins left`}
+
+          <p className="text-xs text-muted-foreground mt-1 flex items-center justify-center gap-3">
+            <span className="flex items-center gap-1">
+              <Clock className="h-2 w-2" />
+              {showTimeLeft ? `${Math.floor(activeTime / 60)}m` : `${Math.floor(timeLeft / 60)}m`}
+            </span>
+            <span className="flex items-center gap-1">
+              <Activity className="h-2 w-2" />
+              {Math.floor(duration)}m total
+            </span>
           </p>
         </div>
 
-        <div className="flex gap-2 w-full">
+        {/* Compact Control buttons */}
+        <div className="flex gap-2 mb-3">
           {isRunning ? (
-            <Button variant="outline" size="sm" className="flex-1" onClick={onPause}>
-              <Pause className="h-4 w-4 mr-1" />
+            <Button
+              variant="outline"
+              size="sm"
+              className="flex-1 transition-all duration-200 hover:bg-orange-50 hover:border-orange-300 text-xs h-8"
+              onClick={handlePause}
+            >
+              <Pause className="h-3 w-3 mr-1" />
               Pause
             </Button>
           ) : (
             <Button
-              className="flex-1"
+              className="flex-1 transition-all duration-200 hover:shadow-md text-xs h-8"
               variant="default"
               size="sm"
-              onClick={activeTime > 0 ? onResume : onStart}
+              onClick={handleStart}
             >
-              <Play className="h-4 w-4 mr-1" />
+              <Play className="h-3 w-3 mr-1" />
               {activeTime > 0 ? "Resume" : "Start"}
             </Button>
           )}
-          <Button variant="outline" size="sm" className="flex-1" onClick={handleReset}>
-            <RotateCcw className="h-4 w-4 mr-1" />
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="flex-1 transition-all duration-200 hover:bg-red-50 hover:border-red-300 text-xs h-8"
+            onClick={handleReset}
+          >
+            <RotateCcw className="h-3 w-3 mr-1" />
             Reset
           </Button>
+        </div>
+
+        {/* Compact Progress visualization */}
+        <div className="space-y-1">
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Progress</span>
+            <span>{progressPercentage}%</span>
+          </div>
+          <div className="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
+            <div
+              className={`h-full transition-all duration-1000 rounded-full ${
+                isNearCompletion ? 'bg-gradient-to-r from-orange-400 to-red-500' :
+                isHalfway ? 'bg-gradient-to-r from-yellow-400 to-orange-500' :
+                'bg-gradient-to-r from-primary to-primary/80'
+              }`}
+              style={{ width: `${progressPercentage}%` }}
+            />
+          </div>
         </div>
       </CardContent>
     </Card>
   )
-} 
+}

@@ -15,25 +15,25 @@ import { Progress } from "./ui/Progress"
  */
 export function SessionProgress({ progress, currentPage, totalPages }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-2">
       <div>
         <div className="flex justify-between mb-1">
-          <span className="text-sm font-medium">Session Progress</span>
-          <span className="text-sm font-medium">{progress}%</span>
+          <span className="text-xs font-medium">Session</span>
+          <span className="text-xs font-medium">{progress}%</span>
         </div>
-        <Progress value={progress} className="h-2" />
+        <Progress value={progress} className="h-1" />
       </div>
 
       <div>
         <div className="flex justify-between mb-1">
-          <span className="text-sm font-medium">Document Progress</span>
-          <span className="text-sm font-medium">{Math.round((currentPage / totalPages) * 100)}%</span>
+          <span className="text-xs font-medium">Document</span>
+          <span className="text-xs font-medium">{Math.round((currentPage / totalPages) * 100)}%</span>
         </div>
-        <Progress value={(currentPage / totalPages) * 100} className="h-2" />
+        <Progress value={(currentPage / totalPages) * 100} className="h-1" />
         <div className="text-xs text-muted-foreground mt-1 text-right">
           Page {currentPage} of {totalPages}
         </div>
       </div>
     </div>
   )
-} 
+}

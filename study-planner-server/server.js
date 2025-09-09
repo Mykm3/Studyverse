@@ -11,9 +11,13 @@ const diagnosticsRoutes = require('./routes/diagnostics');
 const groqRoutes = require('./routes/groq');
 const aiRoutes = require('./routes/ai');
 const geminiStudyPlanRoutes = require('./routes/gemini-studyplan');
+const sessionDataRoutes = require('./routes/sessionData');
 
 // Import IP Monitor for real-time IP detection
 const IPMonitor = require('./ip-monitor');
+
+// Import session data cleanup manager
+const sessionDataCleanup = require('./utils/sessionDataCleanup');
 
 // Debug logging
 console.log('Server configuration:');
@@ -226,6 +230,9 @@ app.use('/api/gemini-studyplan', geminiStudyPlanRoutes);
 console.log('Mounting AI routes at /api/ai (DISABLED)');
 // app.use('/api/ai', aiRoutes); // Disabled - using Groq instead
 
+console.log('Mounting session data routes at /api/session-data');
+app.use('/api/session-data', sessionDataRoutes);
+
 // Protected route example
 app.get("/api/protected", (req, res) => {
   res.send("This is a protected route");
@@ -302,6 +309,10 @@ app.listen(PORT, '0.0.0.0', () => {
     console.log(`\n🔍 IP Monitor: Active (checking every 10 seconds)`);
     console.log(`📝 Auto-updating .env files when IP changes`);
   }
+
+  // Start session data cleanup scheduler
+  console.log(`\n🧹 Starting session data cleanup scheduler...`);
+  sessionDataCleanup.startAutoCleanup();
 
   console.log(`\n✨ Ready to accept connections!\n`);
 });
